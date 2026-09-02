@@ -1,0 +1,1 @@
+"""kirtaP Discord bot."""

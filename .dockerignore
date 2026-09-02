@@ -1,0 +1,13 @@
+.agents/
+.codex/
+.env
+.env.*
+.git/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.py[cod]
+logs/
+send.sh
+tests/

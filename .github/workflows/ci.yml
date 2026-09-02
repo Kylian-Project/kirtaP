@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Vérifications
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Installer uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.9"
+          enable-cache: true
+
+      - name: Installer Python 3.13
+        run: uv python install 3.13
+
+      - name: Installer les dépendances verrouillées
+        run: uv sync --locked
+
+      - name: Vérifier le formatage
+        run: uv run ruff format --check .
+
+      - name: Linter le code
+        run: uv run ruff check .
+
+      - name: Lancer les tests
+        run: uv run pytest
+
+      - name: Construire l'image Docker
+        run: docker build --tag kirtap:ci .

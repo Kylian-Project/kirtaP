@@ -1,9 +1,0 @@
-{
-  "default_prefix": "!",
-  "status_message": "En développement | !help",
-  "embed_color": 2067276,
-  "log_level": "INFO",
-  "features": {
-    "moderation": true
-  }
-}
