@@ -1,131 +1,43 @@
-# 🤖 kirtaP - Le bot Patrick, mais à l'envers !
+# kirtaP
 
-Un bot Discord moderne et modulaire développé en Python avec discord.py.
+Bot Discord en Python pour les commandes générales, la modération, les menus CROUS et la commande `caillou`.
 
-## 📋 Prérequis
+## Installation
 
-- Python 3.8 ou plus récent
+Python 3.13 et [uv](https://docs.astral.sh/uv/) sont requis.
 
-## 🚀 Installation
-
-### 1. Cloner le projet
 ```bash
-git clone URL
-cd kirtaP
+cp .env.example .env
+uv sync
+uv run kirtap
 ```
 
-### 2. Installer les dépendances
+## Configuration
+
+| Variable | Requise | Description |
+| --- | --- | --- |
+| `DISCORD_TOKEN` | Oui | Token du bot Discord. |
+| `OWNER_ID` | Non | Identifiant Discord du propriétaire. |
+| `COMMAND_PREFIX` | Non | Préfixe des commandes, `!` par défaut. |
+| `LOG_LEVEL` | Non | `DEBUG`, `INFO`, `WARNING`, `ERROR` ou `CRITICAL`. |
+| `ENVIRONMENT` | Non | `development` ou `production`. |
+| `STATUS_MESSAGE` | Non | Statut affiché par le bot. |
+| `CROUS_RESTAURANT_ID` | Non | Restaurant CROUS, `1392` par défaut. |
+| `CROUS_CHANNEL_ID` | Non | Canal de publication automatique du menu à 08:00 Europe/Paris. |
+
+Les commandes prefixe nécessitent l'intent privilégié **Message Content**, à activer aussi dans le portail développeur Discord. La commande `clear` requiert `Gérer les messages` pour l'utilisateur et le bot ; `caillou` requiert les droits administrateur.
+
+## Développement
+
 ```bash
-pip install -r requirements.txt
+uv run ruff format .
+uv run ruff check .
+uv run pytest
 ```
 
-3. (Optionnel) Modifiez la configuration dans `config/config.json`
+## Docker
 
-### 4. Lancer le bot
 ```bash
-python main.py
+docker build -t kirtap .
+docker run --rm --env-file .env kirtap
 ```
-
-## 📁 Structure du projet
-
-```
-discord-bot/
-├── main.py                   # Point d'entrée principal
-├── requirements.txt          # Dépendances Python
-├── .gitignore                # Fichiers à ignorer par Git
-├── README.md                 # Ce fichier
-├── src/                      # Code source du bot
-│   ├── __init__.py
-│   ├── bot.py                # Classe principale du bot
-│   ├── commands/             # Modules de commandes
-│   │   ├── __init__.py
-│   │   ├── moderation.py     # Commandes de modération
-│   │   └── general.py        # Commandes générals
-│   ├── events/               # Gestionnaires d'événements
-│   │   ├── __init__.py
-│   │   └── on_ready.py       # Événement bot prêt
-│   └── utils/                # Utilitaires
-│       ├── __init__.py
-│       ├── config_loader.py  # Chargeur de configuration
-│       └── logger.py         # Configuration des logs
-├── config/                   # Fichiers de configuration
-│   └── config.json           # Configuration principale
-└── logs/                     # ichiers de logs
-```
-
-## ⚙️ Configuration
-
-### Variables d'environnement (.env)
-- `DISCORD_TOKEN` : Token de votre bot Discord (obligatoire)
-- `OWNER_ID` : Votre ID Discord (optionnel)
-- `ENVIRONMENT` : Environnement (development/production)
-- `LOG_LEVEL` : Niveau de logging (DEBUG/INFO/WARNING/ERROR)
-
-### Configuration JSON (config/config.json)
-```json
-{
-  "default_prefix": "!",
-  "status_message": "En développement | !help",
-  "embed_color": 2067276,
-  "log_level": "INFO",
-  "features": {
-    "moderation": true
-  }
-}
-```
-
-## 🎯 Fonctionnalités
-
-### Commandes générales
-- `!ping` - Teste la latence du bot
-- `!info` - Informations sur le bot
-- `!help` - Aide et liste des commandes
-
-### Commandes de modération
-- `!clear [nombre]` - Supprimer des messages
-
-## 🔧 Développement
-
-### Ajouter une nouvelle commande
-1. Créez un nouveau fichier dans `src/commands/`
-2. Utilisez le template suivant :
-
-```python
-import discord
-from discord.ext import commands
-
-class VotreCategorie(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-    
-    @commands.command(name="votre_commande")
-    async def votre_commande(self, ctx):
-        await ctx.send("Votre réponse")
-
-async def setup(bot):
-    await bot.add_cog(VotreCategorie(bot))
-```
-
-3. Ajoutez le module dans `src/bot.py` dans la liste `cogs_to_load`
-
-### Ajouter un événement
-1. Créez un fichier dans `src/events/`
-2. Utilisez le template d'événement Discord
-
-### Logs
-Les logs sont automatiquement sauvegardés dans le dossier `logs/` avec rotation quotidienne.
-
-## 🌐 API usage
-Utilisation de [CROUStillantAPI](https://api.croustillant.menu/) pour la récupération des menus CROUS.
-
-## 📝 Licence
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
-
-## 📞 Support
-
-Si vous avez des questions ou des problèmes :
-- Ouvrez une issue sur GitHub
-- Contactez-moi sur Discord
-
----
-Fait avec ❤️ en Python
