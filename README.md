@@ -27,6 +27,10 @@ uv run kirtap
 
 Les commandes prefixe nécessitent l'intent privilégié **Message Content**, à activer aussi dans le portail développeur Discord. La commande `clear` requiert `Gérer les messages` pour l'utilisateur et le bot ; `caillou` requiert les droits administrateur.
 
+## Menus CROUS
+
+Les menus sont envoyés sous forme d'image directement générée par l'API CROUStillant. Les commandes disponibles sont `/menu [date]` et `/menu_semaine`.
+
 ## Développement
 
 ```bash
