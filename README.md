@@ -1,6 +1,6 @@
 # kirtaP
 
-Bot Discord en Python pour les commandes générales, la modération, les menus CROUS et la commande `caillou`.
+Bot Discord en Python des Master kirtaP ?
 
 ## Installation
 
@@ -24,8 +24,6 @@ uv run kirtap
 | `STATUS_MESSAGE` | Non | Statut affiché par le bot. |
 | `CROUS_RESTAURANT_ID` | Non | Restaurant CROUS, `1392` par défaut. |
 | `CROUS_CHANNEL_ID` | Non | Canal de publication automatique du menu à 08:00 Europe/Paris. |
-
-Les commandes prefixe nécessitent l'intent privilégié **Message Content**, à activer aussi dans le portail développeur Discord. La commande `clear` requiert `Gérer les messages` pour l'utilisateur et le bot ; `caillou` requiert les droits administrateur.
 
 ## Menus CROUS
 
