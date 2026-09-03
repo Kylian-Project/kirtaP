@@ -148,7 +148,7 @@ class Crous(commands.Cog):
             return
 
         embed = discord.Embed(
-            title=f"🍽️ {restaurant.name} — 5 prochains menus",
+            title=f"🍽️ {restaurant.name} - 5 prochains menus",
             description="Choisissez un jour pour recevoir l'image du menu.",
             color=discord.Color.orange(),
         )
@@ -216,7 +216,7 @@ def _menu_file(menu_date: str, image: bytes) -> discord.File:
 def _menu_embed(menu_date: str) -> discord.Embed:
     filename = menu_image_filename(menu_date)
     embed = discord.Embed(
-        title=f"🍽️ Menu CROUS — {format_menu_date(menu_date).capitalize()}",
+        title=f"🍽️ Menu CROUS - {format_menu_date(menu_date).capitalize()}",
         color=discord.Color.orange(),
     )
     embed.set_image(url=f"attachment://{filename}")
@@ -226,14 +226,14 @@ def _menu_embed(menu_date: str) -> discord.Embed:
 
 def _daily_menu_embed(restaurant_name: str, menu_date: str) -> discord.Embed:
     embed = _menu_embed(menu_date)
-    embed.title = f"🍽️ CROUS — {format_menu_date(menu_date).capitalize()}"
+    embed.title = f"🍽️ CROUS - {format_menu_date(menu_date).capitalize()}"
     embed.description = f"🟢 **{restaurant_name}**\nOuvert aujourd'hui."
     return embed
 
 
 def _closed_embed(restaurant_name: str, menu_date: str) -> discord.Embed:
     return discord.Embed(
-        title=f"🍽️ CROUS — {format_menu_date(menu_date).capitalize()}",
+        title=f"🍽️ CROUS - {format_menu_date(menu_date).capitalize()}",
         description=f"🔴 **{restaurant_name}** est fermé aujourd'hui.",
         color=discord.Color.red(),
     )
