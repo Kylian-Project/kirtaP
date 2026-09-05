@@ -30,7 +30,20 @@ class KirtaPBot(commands.Bot):
         )
         self.settings = settings
         self.http_session: aiohttp.ClientSession | None = None
+        self.tree.interaction_check = self.interaction_check
         self.tree.on_error = self.on_app_command_error
+
+    def can_use_bot(self, user: discord.User | discord.Member) -> bool:
+        return self.settings.environment == "production" or (
+            isinstance(user, discord.Member) and user.guild_permissions.administrator
+        )
+
+    async def invoke(self, context: commands.Context[Any], /) -> None:
+        if self.can_use_bot(context.author):
+            await super().invoke(context)
+
+    async def interaction_check(self, interaction: discord.Interaction[Any]) -> bool:
+        return self.can_use_bot(interaction.user)
 
     async def setup_hook(self) -> None:
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))

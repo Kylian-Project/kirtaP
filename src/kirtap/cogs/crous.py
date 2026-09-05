@@ -1,5 +1,5 @@
 import logging
-from datetime import time
+from datetime import datetime, time
 from io import BytesIO
 from typing import Any
 
@@ -55,10 +55,14 @@ class MenuDateButton(discord.ui.Button[discord.ui.View]):
 
 
 class WeekMenuView(discord.ui.View):
-    def __init__(self, api: CrousApi, menu_dates: list[str]) -> None:
+    def __init__(self, bot: KirtaPBot, api: CrousApi, menu_dates: list[str]) -> None:
         super().__init__(timeout=900)
+        self.bot = bot
         for menu_date in menu_dates:
             self.add_item(MenuDateButton(api, menu_date))
+
+    async def interaction_check(self, interaction: discord.Interaction[Any]) -> bool:
+        return await self.bot.interaction_check(interaction)
 
 
 class Crous(commands.Cog):
@@ -160,7 +164,7 @@ class Crous(commands.Cog):
             inline=False,
         )
         embed.set_footer(text="Menus fournis par CROUStillant.menu")
-        await context.send(embed=embed, view=WeekMenuView(self.api, menu_dates))
+        await context.send(embed=embed, view=WeekMenuView(self.bot, self.api, menu_dates))
 
     @tasks.loop(
         time=(
@@ -170,6 +174,8 @@ class Crous(commands.Cog):
     )
     async def daily_menu_task(self) -> None:
         menu_date = today_menu_date()
+        if datetime.strptime(menu_date, "%d-%m-%Y").weekday() >= 5:
+            return
         if self._daily_menu_posted == menu_date:
             return
 
