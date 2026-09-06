@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "aiohttp>=3.13,<4",
+    "aiosqlite>=0.21,<1",
     "discord.py>=2.6.4,<3",
     "python-dotenv>=1.1,<2",
     "tzdata>=2025.2",

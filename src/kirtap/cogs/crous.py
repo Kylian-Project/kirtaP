@@ -1,5 +1,6 @@
 import logging
-from datetime import time
+from datetime import datetime, time
+from io import BytesIO
 from typing import Any
 
 import discord
@@ -9,21 +10,59 @@ from discord.ext import commands, tasks
 from ..bot import KirtaPBot
 from ..crous import (
     PARIS_TIMEZONE,
-    Category,
     CrousApi,
-    Menu,
-    categories_for_meal,
-    category_dishes,
-    find_menu,
-    menu_meals,
+    CrousApiError,
+    format_menu_date,
+    menu_image_filename,
+    next_menu_dates,
     parse_menu_date,
     today_menu_date,
 )
 
 logger = logging.getLogger(__name__)
 
-MAX_EMBED_FIELDS = 25
-MAX_EMBED_LENGTH = 5800
+
+class MenuDateButton(discord.ui.Button[discord.ui.View]):
+    def __init__(self, api: CrousApi, menu_date: str) -> None:
+        self._api = api
+        self._menu_date = menu_date
+        super().__init__(
+            label=format_menu_date(menu_date).capitalize(), style=discord.ButtonStyle.secondary
+        )
+
+    async def callback(self, interaction: discord.Interaction[Any]) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            image = await self._api.fetch_menu_image(self._menu_date)
+        except CrousApiError:
+            logger.warning("Unable to fetch CROUS menu image for weekly menu", exc_info=True)
+            await interaction.followup.send(
+                "❌ Impossible de récupérer ce menu CROUS.", ephemeral=True
+            )
+            return
+
+        if image is None:
+            await interaction.followup.send(
+                "📅 Aucun menu n'est disponible pour cette date.", ephemeral=True
+            )
+            return
+
+        await interaction.followup.send(
+            embed=_menu_embed(self._menu_date),
+            file=_menu_file(self._menu_date, image),
+            ephemeral=True,
+        )
+
+
+class WeekMenuView(discord.ui.View):
+    def __init__(self, bot: KirtaPBot, api: CrousApi, menu_dates: list[str]) -> None:
+        super().__init__(timeout=900)
+        self.bot = bot
+        for menu_date in menu_dates:
+            self.add_item(MenuDateButton(api, menu_date))
+
+    async def interaction_check(self, interaction: discord.Interaction[Any]) -> bool:
+        return await self.bot.interaction_check(interaction)
 
 
 class Crous(commands.Cog):
@@ -32,6 +71,7 @@ class Crous(commands.Cog):
             raise RuntimeError("The HTTP session must be created before loading the CROUS cog.")
         self.bot = bot
         self.api = CrousApi(bot.http_session, bot.settings.crous_restaurant_id)
+        self._daily_menu_posted: str | None = None
         if bot.settings.crous_channel_id is None:
             logger.info("Automatic CROUS posting is disabled because CROUS_CHANNEL_ID is not set")
         else:
@@ -42,13 +82,24 @@ class Crous(commands.Cog):
 
     @commands.hybrid_command(
         name="menu",
-        aliases=["crous"],
-        help="Affiche le menu CROUS du jour ou d'une date donnée.",
+        help="Affiche l'image du menu CROUS du jour ou d'une date donnée.",
     )
     @app_commands.describe(date="Date au format JJ-MM-AAAA")
     async def menu(self, context: commands.Context[Any], date: str | None = None) -> None:
+        await self._handle_menu_command(context, date)
+
+    @commands.hybrid_command(
+        name="menu_semaine",
+        help="Affiche les menus CROUS disponibles cette semaine.",
+    )
+    async def menu_semaine(self, context: commands.Context[Any]) -> None:
+        await self._handle_week_command(context)
+
+    async def _handle_menu_command(
+        self, context: commands.Context[Any], requested_date: str | None
+    ) -> None:
         try:
-            target_date = parse_menu_date(date) if date else today_menu_date()
+            menu_date = parse_menu_date(requested_date) if requested_date else today_menu_date()
         except ValueError:
             await context.send(
                 "❌ Format de date invalide. Utilisez JJ-MM-AAAA, par exemple 01-10-2025."
@@ -57,75 +108,77 @@ class Crous(commands.Cog):
 
         if context.interaction:
             await context.defer()
-            await self._send_menu(context, target_date)
+            await self._send_menu(context, menu_date)
         else:
             async with context.typing():
-                await self._send_menu(context, target_date)
+                await self._send_menu(context, menu_date)
 
-    @commands.hybrid_command(
-        name="menu_semaine",
-        aliases=["menus"],
-        help="Liste les dates des menus CROUS disponibles.",
-    )
-    async def menu_semaine(self, context: commands.Context[Any]) -> None:
+    async def _handle_week_command(self, context: commands.Context[Any]) -> None:
         if context.interaction:
             await context.defer()
-            await self._send_available_dates(context)
+            await self._send_week(context)
         else:
             async with context.typing():
-                await self._send_available_dates(context)
+                await self._send_week(context)
 
-    async def _send_menu(self, context: commands.Context[Any], target_date: str) -> None:
-        menus = await self._fetch_menus(context)
-        if menus is None:
+    async def _send_menu(self, context: commands.Context[Any], menu_date: str) -> None:
+        try:
+            image = await self.api.fetch_menu_image(menu_date)
+        except CrousApiError:
+            logger.warning("Unable to fetch CROUS menu image", exc_info=True)
+            await context.send(embed=_error_embed())
             return
 
-        menu = find_menu(menus, target_date)
-        if menu is None:
-            embed = discord.Embed(
-                title="📅 Pas de menu",
-                description=f"Aucun menu trouvé pour le {target_date}.",
-                color=discord.Color.orange(),
+        if image is None:
+            await context.send(embed=_no_menu_embed(menu_date))
+            return
+
+        await context.send(embed=_menu_embed(menu_date), file=_menu_file(menu_date, image))
+
+    async def _send_week(self, context: commands.Context[Any]) -> None:
+        try:
+            restaurant = await self.api.fetch_restaurant()
+            available_dates = await self.api.fetch_menu_dates()
+        except CrousApiError:
+            logger.warning("Unable to fetch CROUS weekly menus", exc_info=True)
+            await context.send(embed=_error_embed())
+            return
+
+        menu_dates = next_menu_dates(available_dates)
+        if not menu_dates:
+            await context.send(
+                "📅 Aucun menu n'est encore disponible pour les cinq prochains jours."
             )
-            await context.send(embed=embed)
-            return
-        await context.send(embed=_menu_embed(menu))
-
-    async def _send_available_dates(self, context: commands.Context[Any]) -> None:
-        menus = await self._fetch_menus(context)
-        if menus is None:
-            return
-        if not menus:
-            await context.send("📅 Aucun menu disponible.")
             return
 
-        dates = [str(menu.get("date", "Date inconnue")) for menu in menus[:10]]
         embed = discord.Embed(
-            title="📅 Menus CROUS disponibles",
-            description="Utilisez `/menu` ou la commande prefixe `menu` avec une date.",
+            title=f"🍽️ {restaurant.name} - 5 prochains menus",
+            description="Choisissez un jour pour recevoir l'image du menu.",
             color=discord.Color.orange(),
         )
         embed.add_field(
-            name="🗓️ Dates disponibles",
-            value="\n".join(f"**{index}.** {date}" for index, date in enumerate(dates, start=1)),
+            name="📅 Menus disponibles",
+            value="\n".join(
+                f"• {format_menu_date(menu_date).capitalize()}" for menu_date in menu_dates
+            ),
             inline=False,
         )
-        await context.send(embed=embed)
+        embed.set_footer(text="Menus fournis par CROUStillant.menu")
+        await context.send(embed=embed, view=WeekMenuView(self.bot, self.api, menu_dates))
 
-    async def _fetch_menus(self, context: commands.Context[Any]) -> list[Menu] | None:
-        menus = await self.api.fetch_menus()
-        if menus is not None:
-            return menus
-        embed = discord.Embed(
-            title="❌ Erreur",
-            description="Impossible de récupérer les menus CROUS.",
-            color=discord.Color.red(),
+    @tasks.loop(
+        time=(
+            time(hour=8, tzinfo=PARIS_TIMEZONE),
+            time(hour=9, minute=5, tzinfo=PARIS_TIMEZONE),
         )
-        await context.send(embed=embed)
-        return None
-
-    @tasks.loop(time=time(hour=8, tzinfo=PARIS_TIMEZONE))
+    )
     async def daily_menu_task(self) -> None:
+        menu_date = today_menu_date()
+        if datetime.strptime(menu_date, "%d-%m-%Y").weekday() >= 5:
+            return
+        if self._daily_menu_posted == menu_date:
+            return
+
         channel_id = self.bot.settings.crous_channel_id
         if channel_id is None:
             return
@@ -136,18 +189,25 @@ class Crous(commands.Cog):
             return
 
         try:
-            menus = await self.api.fetch_menus()
-            if menus is None:
+            restaurant = await self.api.fetch_restaurant()
+            if not await self.api.fetch_is_open():
+                await channel.send(embed=_closed_embed(restaurant.name, menu_date))
+                self._daily_menu_posted = menu_date
+                logger.info("Posted closed CROUS notice")
                 return
-            menu = find_menu(menus, today_menu_date())
-            if menu is None:
-                logger.info("No CROUS menu is available for today")
+
+            image = await self.api.fetch_menu_image(menu_date)
+            if image is None:
+                logger.info("No CROUS menu at %s; it will be retried at 09:05", menu_date)
                 return
-            embed = _menu_embed(menu)
-            embed.title = "🌅 Menu du jour — CROUS"
-            await channel.send("🍽️ **Le menu du jour est arrivé !**", embed=embed)
+
+            await channel.send(
+                embed=_daily_menu_embed(restaurant.name, menu_date),
+                file=_menu_file(menu_date, image),
+            )
+            self._daily_menu_posted = menu_date
             logger.info("Posted the automatic CROUS menu")
-        except Exception:
+        except (CrousApiError, discord.HTTPException):
             logger.exception("Unable to post the automatic CROUS menu")
 
     @daily_menu_task.before_loop
@@ -155,54 +215,50 @@ class Crous(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-def _menu_embed(menu: Menu) -> discord.Embed:
-    date = str(menu.get("date", "Date inconnue"))
+def _menu_file(menu_date: str, image: bytes) -> discord.File:
+    return discord.File(BytesIO(image), filename=menu_image_filename(menu_date))
+
+
+def _menu_embed(menu_date: str) -> discord.Embed:
+    filename = menu_image_filename(menu_date)
     embed = discord.Embed(
-        title="🍽️ Menu CROUS",
-        description=f"📅 **{date}**",
+        title=f"🍽️ Menu CROUS - {format_menu_date(menu_date).capitalize()}",
         color=discord.Color.orange(),
-        timestamp=discord.utils.utcnow(),
     )
-    used_length = len(embed.title) + len(embed.description)
-    hidden_categories = 0
-
-    for meal in menu_meals(menu):
-        meal_name = str(meal.get("type", "Repas")).capitalize()
-        for category in categories_for_meal(meal):
-            dishes = category_dishes(category)
-            if not dishes:
-                continue
-            if len(embed.fields) >= MAX_EMBED_FIELDS:
-                hidden_categories += 1
-                continue
-
-            name = _truncate(f"📋 {meal_name} — {_category_name(category)}", 256)
-            remaining_length = MAX_EMBED_LENGTH - used_length - len(name)
-            if remaining_length < 2:
-                hidden_categories += 1
-                continue
-            value = _truncate(
-                "\n".join(f"• {dish}" for dish in dishes), min(1024, remaining_length)
-            )
-            embed.add_field(name=name, value=value, inline=False)
-            used_length += len(name) + len(value)
-
-    footer = "🏫 Restaurant universitaire | Données via CROUStillantAPI"
-    if hidden_categories:
-        footer = f"{footer} | {hidden_categories} catégorie(s) non affichée(s)"
-    embed.set_footer(text=footer)
+    embed.set_image(url=f"attachment://{filename}")
+    embed.set_footer(text="Menu fourni par CROUStillant.menu")
     return embed
 
 
-def _category_name(category: Category) -> str:
-    label = str(category.get("libelle", "Catégorie"))
-    return label.replace("Salle des ", "").replace(" - ", " | ")
+def _daily_menu_embed(restaurant_name: str, menu_date: str) -> discord.Embed:
+    embed = _menu_embed(menu_date)
+    embed.title = f"🍽️ CROUS - {format_menu_date(menu_date).capitalize()}"
+    embed.description = f"🟢 **{restaurant_name}**\nOuvert aujourd'hui."
+    return embed
 
 
-def _truncate(value: str, limit: int) -> str:
-    if len(value) <= limit:
-        return value
-    return f"{value[: limit - 1].rstrip()}…"
+def _closed_embed(restaurant_name: str, menu_date: str) -> discord.Embed:
+    return discord.Embed(
+        title=f"🍽️ CROUS - {format_menu_date(menu_date).capitalize()}",
+        description=f"🔴 **{restaurant_name}** est fermé aujourd'hui.",
+        color=discord.Color.red(),
+    )
+
+
+def _no_menu_embed(menu_date: str) -> discord.Embed:
+    return discord.Embed(
+        title="📅 Pas de menu",
+        description=f"Aucun menu n'est disponible pour le {format_menu_date(menu_date)}.",
+        color=discord.Color.orange(),
+    )
+
+
+def _error_embed() -> discord.Embed:
+    return discord.Embed(
+        title="❌ Erreur CROUS",
+        description="Impossible de récupérer les informations CROUS. Réessayez un peu plus tard.",
+        color=discord.Color.red(),
+    )
 
 
 async def setup(bot: KirtaPBot) -> None:

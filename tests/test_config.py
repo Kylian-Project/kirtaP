@@ -19,6 +19,10 @@ def test_loads_defaults() -> None:
     assert settings.log_level == "INFO"
     assert settings.crous_restaurant_id == 1392
     assert settings.crous_channel_id is None
+    assert settings.presence_channel_id is None
+    assert settings.presence_carrier_role_id is None
+    assert settings.presence_access_role_id is None
+    assert settings.presence_database_path == "data/presence.db"
 
 
 def test_requires_discord_token() -> None:
@@ -26,7 +30,16 @@ def test_requires_discord_token() -> None:
         load_settings({"ENVIRONMENT": "development"})
 
 
-@pytest.mark.parametrize("name, value", [("OWNER_ID", "none"), ("CROUS_CHANNEL_ID", "0")])
+@pytest.mark.parametrize(
+    "name, value",
+    [
+        ("OWNER_ID", "none"),
+        ("CROUS_CHANNEL_ID", "0"),
+        ("PRESENCE_CHANNEL_ID", "wrong"),
+        ("PRESENCE_CARRIER_ROLE_ID", "0"),
+        ("PRESENCE_ACCESS_ROLE_ID", "-1"),
+    ],
+)
 def test_rejects_invalid_optional_ids(name: str, value: str) -> None:
     with pytest.raises(ConfigurationError, match=name):
         load_settings(environment(**{name: value}))

@@ -7,12 +7,14 @@ from discord import app_commands
 from discord.ext import commands
 
 from .config import Settings
+from .presence import PresenceStore
 
 logger = logging.getLogger(__name__)
 
 EXTENSIONS = (
     "kirtap.cogs.general",
     "kirtap.cogs.moderation",
+    "kirtap.cogs.presence",
     "kirtap.cogs.crous",
     "kirtap.cogs.fun",
 )
@@ -30,10 +32,25 @@ class KirtaPBot(commands.Bot):
         )
         self.settings = settings
         self.http_session: aiohttp.ClientSession | None = None
+        self.presence_store = PresenceStore(settings.presence_database_path)
+        self.tree.interaction_check = self.interaction_check
         self.tree.on_error = self.on_app_command_error
+
+    def can_use_bot(self, user: discord.User | discord.Member) -> bool:
+        return self.settings.environment == "production" or (
+            isinstance(user, discord.Member) and user.guild_permissions.administrator
+        )
+
+    async def invoke(self, context: commands.Context[Any], /) -> None:
+        if self.can_use_bot(context.author):
+            await super().invoke(context)
+
+    async def interaction_check(self, interaction: discord.Interaction[Any]) -> bool:
+        return self.can_use_bot(interaction.user)
 
     async def setup_hook(self) -> None:
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+        await self.presence_store.open()
         for extension in EXTENSIONS:
             await self.load_extension(extension)
             logger.info("Loaded extension %s", extension)
@@ -44,6 +61,7 @@ class KirtaPBot(commands.Bot):
     async def close(self) -> None:
         if self.http_session is not None and not self.http_session.closed:
             await self.http_session.close()
+        await self.presence_store.close()
         await super().close()
 
     async def on_ready(self) -> None:
@@ -55,7 +73,7 @@ class KirtaPBot(commands.Bot):
     ) -> None:
         if isinstance(error, commands.CommandNotFound):
             return
-        if isinstance(error, commands.MissingPermissions):
+        if isinstance(error, (commands.MissingPermissions, commands.MissingRole)):
             message = "❌ Vous n'avez pas les permissions nécessaires pour cette commande."
         elif isinstance(error, commands.BotMissingPermissions):
             message = "❌ Je n'ai pas les permissions nécessaires pour cette commande."
@@ -77,7 +95,14 @@ class KirtaPBot(commands.Bot):
         self, interaction: discord.Interaction[Any], error: app_commands.AppCommandError
     ) -> None:
         original = error.original if isinstance(error, app_commands.CommandInvokeError) else error
-        if isinstance(original, (app_commands.MissingPermissions, commands.MissingPermissions)):
+        if isinstance(
+            original,
+            (
+                app_commands.MissingPermissions,
+                app_commands.MissingRole,
+                commands.MissingPermissions,
+            ),
+        ):
             message = "❌ Vous n'avez pas les permissions nécessaires pour cette commande."
         elif isinstance(
             original, (app_commands.BotMissingPermissions, commands.BotMissingPermissions)

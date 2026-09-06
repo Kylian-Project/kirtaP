@@ -60,7 +60,7 @@ class General(commands.Cog):
             else:
                 usage = f"`{context.prefix}{command.name} {command.signature}`".rstrip()
                 embed = discord.Embed(
-                    title=f"Aide — {command.name}",
+                    title=f"Aide - {command.name}",
                     description=command.help or "Aucune description disponible.",
                     color=discord.Color.blue(),
                 )
