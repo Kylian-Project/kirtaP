@@ -19,6 +19,7 @@ class Fun(commands.Cog):
         name="caillou",
         aliases=["pierre", "rock"],
         help="Raconte l'histoire épique du caillou du voisin du Y.",
+        hidden=True,
     )
     @commands.has_permissions(administrator=True)
     @app_commands.default_permissions(administrator=True)
