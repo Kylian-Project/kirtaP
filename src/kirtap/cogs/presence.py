@@ -192,9 +192,7 @@ class Presence(commands.Cog):
             if presence_class is not None:
                 await context.send(embed=_topo_embed(presence_class, today))
 
-    @presence.command(
-        name="sync", help="Synchronise immédiatement le rôle du porteur actuel."
-    )
+    @presence.command(name="sync", help="Synchronise immédiatement le rôle du porteur actuel.")
     async def sync(self, context: commands.Context[Any]) -> None:
         if context.interaction:
             await context.defer(ephemeral=True)
@@ -340,7 +338,10 @@ def _topo_embed(presence_class: PresenceClass, today: date) -> discord.Embed:
         )
     embed.add_field(name="Fiche actuelle", value=current_value, inline=False)
 
-    roster = [f"{position}. <@{user_id}>" for position, user_id in enumerate(presence_class.member_ids, start=1)]
+    roster = [
+        f"{position}. <@{user_id}>"
+        for position, user_id in enumerate(presence_class.member_ids, start=1)
+    ]
     embed.add_field(
         name="Ordre de rotation",
         value=_field_value(roster, "Aucun élève dans la rotation."),
