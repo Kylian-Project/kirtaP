@@ -65,6 +65,9 @@ class Presence(commands.Cog):
         )
 
     @presence.command(name="classe_creer", help="Crée une classe pour la rotation de présence.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(classe="Exemple : M2 SIL")
     async def classe_creer(self, context: commands.Context[Any], classe: str) -> None:
         guild = self._guild_from_context(context)
@@ -76,6 +79,9 @@ class Presence(commands.Cog):
         await context.send(f"Classe **{presence_class.name}** prête pour la configuration.")
 
     @presence.command(name="membre_ajouter", help="Ajoute un élève à la fin de la rotation.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(classe="Nom de la classe", membre="Élève à ajouter")
     async def membre_ajouter(
         self, context: commands.Context[Any], classe: str, membre: discord.Member
@@ -94,6 +100,9 @@ class Presence(commands.Cog):
         )
 
     @presence.command(name="membre_retirer", help="Retire un élève de la rotation.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(classe="Nom de la classe", membre="Élève à retirer")
     async def membre_retirer(
         self, context: commands.Context[Any], classe: str, membre: discord.Member
@@ -193,6 +202,9 @@ class Presence(commands.Cog):
                 await context.send(embed=_topo_embed(presence_class, today))
 
     @presence.command(name="sync", help="Synchronise immédiatement le rôle du porteur actuel.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def sync(self, context: commands.Context[Any]) -> None:
         if context.interaction:
             await context.defer(ephemeral=True)
