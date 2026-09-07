@@ -27,6 +27,7 @@ class PresenceClass:
     name: str
     member_ids: tuple[int, ...]
     periods: tuple[SchoolPeriod, ...]
+    channel_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,7 @@ class PresenceStore:
                 id INTEGER PRIMARY KEY,
                 guild_id INTEGER NOT NULL,
                 name TEXT NOT NULL COLLATE NOCASE,
+                channel_id INTEGER,
                 UNIQUE(guild_id, name)
             );
 
@@ -85,6 +87,13 @@ class PresenceStore:
             );
             """
         )
+        cursor = await self._connection.execute("PRAGMA table_info(presence_classes)")
+        columns = {str(row[1]) for row in await cursor.fetchall()}
+        await cursor.close()
+        if "channel_id" not in columns:
+            await self._connection.execute(
+                "ALTER TABLE presence_classes ADD COLUMN channel_id INTEGER"
+            )
         await self._connection.commit()
 
     async def close(self) -> None:
@@ -110,7 +119,8 @@ class PresenceStore:
     async def get_class(self, guild_id: int, name: str) -> PresenceClass | None:
         connection = self._require_connection()
         cursor = await connection.execute(
-            "SELECT id, name FROM presence_classes WHERE guild_id = ? AND name = ? COLLATE NOCASE",
+            "SELECT id, name, channel_id FROM presence_classes "
+            "WHERE guild_id = ? AND name = ? COLLATE NOCASE",
             (guild_id, name.strip()),
         )
         row = await cursor.fetchone()
@@ -120,12 +130,21 @@ class PresenceStore:
     async def list_classes(self, guild_id: int) -> list[PresenceClass]:
         connection = self._require_connection()
         cursor = await connection.execute(
-            "SELECT id, name FROM presence_classes WHERE guild_id = ? ORDER BY name COLLATE NOCASE",
+            "SELECT id, name, channel_id FROM presence_classes "
+            "WHERE guild_id = ? ORDER BY name COLLATE NOCASE",
             (guild_id,),
         )
         rows = await cursor.fetchall()
         await cursor.close()
         return [await self._class_from_row(row) for row in rows]
+
+    async def set_channel(self, presence_class: PresenceClass, channel_id: int) -> None:
+        connection = self._require_connection()
+        await connection.execute(
+            "UPDATE presence_classes SET channel_id = ? WHERE id = ?",
+            (channel_id, presence_class.id),
+        )
+        await connection.commit()
 
     async def add_member(self, presence_class: PresenceClass, user_id: int) -> bool:
         connection = self._require_connection()
@@ -252,7 +271,11 @@ class PresenceStore:
         )
         await period_cursor.close()
         return PresenceClass(
-            id=class_id, name=str(row["name"]), member_ids=member_ids, periods=periods
+            id=class_id,
+            name=str(row["name"]),
+            member_ids=member_ids,
+            periods=periods,
+            channel_id=int(row["channel_id"]) if row["channel_id"] is not None else None,
         )
 
     def _require_connection(self) -> aiosqlite.Connection:

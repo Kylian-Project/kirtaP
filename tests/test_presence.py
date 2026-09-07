@@ -1,6 +1,7 @@
 import asyncio
 from datetime import date
 
+import aiosqlite
 import pytest
 
 from kirtap.presence import (
@@ -77,6 +78,7 @@ def test_store_keeps_a_class_roster_and_periods() -> None:
             presence_class = await store.ensure_class(42, "M2 SIL")
             assert await store.add_member(presence_class, 101)
             assert await store.add_member(presence_class, 202)
+            await store.set_channel(presence_class, 987)
             await store.replace_periods(
                 presence_class,
                 [SchoolPeriod(start=date(2026, 9, 7), end=date(2026, 9, 25))],
@@ -90,4 +92,38 @@ def test_store_keeps_a_class_roster_and_periods() -> None:
     loaded = asyncio.run(scenario())
 
     assert loaded.member_ids == (101, 202)
+    assert loaded.channel_id == 987
     assert loaded.periods == (SchoolPeriod(start=date(2026, 9, 7), end=date(2026, 9, 25)),)
+
+
+def test_store_migrates_existing_database_with_class_channels(tmp_path) -> None:
+    async def scenario() -> None:
+        database_path = tmp_path / "presence.db"
+        connection = await aiosqlite.connect(database_path)
+        await connection.executescript(
+            """
+            CREATE TABLE presence_classes (
+                id INTEGER PRIMARY KEY,
+                guild_id INTEGER NOT NULL,
+                name TEXT NOT NULL COLLATE NOCASE,
+                UNIQUE(guild_id, name)
+            );
+            INSERT INTO presence_classes (guild_id, name) VALUES (42, 'M2 SIL');
+            """
+        )
+        await connection.close()
+
+        store = PresenceStore(str(database_path))
+        await store.open()
+        try:
+            presence_class = await store.get_class(42, "M2 SIL")
+            assert presence_class is not None
+            assert presence_class.channel_id is None
+            await store.set_channel(presence_class, 987)
+            updated = await store.get_class(42, "M2 SIL")
+            assert updated is not None
+            assert updated.channel_id == 987
+        finally:
+            await store.close()
+
+    asyncio.run(scenario())
