@@ -1,5 +1,6 @@
 import platform
 import time
+from importlib.metadata import version
 from typing import Any
 
 import discord
@@ -38,6 +39,7 @@ class General(commands.Cog):
             value=str(sum(guild.member_count or 0 for guild in self.bot.guilds)),
         )
         embed.add_field(name="🐍 Version Python", value=platform.python_version())
+        embed.add_field(name="🤖 Version kirtaP", value=f"v{version('kirtap')}")
         embed.add_field(name="📚 Version discord.py", value=discord.__version__)
         if user is not None:
             embed.set_footer(text=f"Bot ID : {user.id}")

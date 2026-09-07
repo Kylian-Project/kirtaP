@@ -27,7 +27,7 @@ class Presence(commands.Cog):
             self.presence_task.start()
         else:
             logger.info(
-                "Presence automation is disabled because its channel or role is not configured"
+                "Presence automation is disabled because its carrier role is not configured"
             )
 
     def cog_unload(self) -> None:
@@ -61,10 +61,14 @@ class Presence(commands.Cog):
     async def presence(self, context: commands.Context[Any]) -> None:
         await context.send(
             "Utilisez `presence classe_creer`, `presence membre_ajouter`, "
-            "`presence periodes_definir`, `presence statut` ou `presence topo`."
+            "`presence salon_definir`, `presence periodes_definir`, `presence statut` "
+            "ou `presence topo`."
         )
 
     @presence.command(name="classe_creer", help="Crée une classe pour la rotation de présence.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(classe="Exemple : M2 SIL")
     async def classe_creer(self, context: commands.Context[Any], classe: str) -> None:
         guild = self._guild_from_context(context)
@@ -75,7 +79,30 @@ class Presence(commands.Cog):
             return
         await context.send(f"Classe **{presence_class.name}** prête pour la configuration.")
 
+    @presence.command(name="salon_definir", help="Définit le salon des notifications d'une classe.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(classe="Nom de la classe", salon="Salon des notifications")
+    async def salon_definir(
+        self, context: commands.Context[Any], classe: str, salon: discord.TextChannel
+    ) -> None:
+        guild = self._guild_from_context(context)
+        if salon.guild.id != guild.id:
+            await context.send("❌ Le salon doit appartenir à ce serveur.")
+            return
+        presence_class = await self._get_class(context, classe)
+        if presence_class is None:
+            return
+        await self.bot.presence_store.set_channel(presence_class, salon.id)
+        await context.send(
+            f"Les notifications de **{presence_class.name}** seront envoyées dans {salon.mention}."
+        )
+
     @presence.command(name="membre_ajouter", help="Ajoute un élève à la fin de la rotation.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(classe="Nom de la classe", membre="Élève à ajouter")
     async def membre_ajouter(
         self, context: commands.Context[Any], classe: str, membre: discord.Member
@@ -94,6 +121,9 @@ class Presence(commands.Cog):
         )
 
     @presence.command(name="membre_retirer", help="Retire un élève de la rotation.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(classe="Nom de la classe", membre="Élève à retirer")
     async def membre_retirer(
         self, context: commands.Context[Any], classe: str, membre: discord.Member
@@ -193,11 +223,16 @@ class Presence(commands.Cog):
                 await context.send(embed=_topo_embed(presence_class, today))
 
     @presence.command(name="sync", help="Synchronise immédiatement le rôle du porteur actuel.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def sync(self, context: commands.Context[Any]) -> None:
         if context.interaction:
             await context.defer(ephemeral=True)
         try:
-            assignments = await self._synchronize_presence(send_notifications=True)
+            assignments = await self._synchronize_presence(
+                send_notifications=True, guild=self._guild_from_context(context)
+            )
         except (discord.Forbidden, discord.HTTPException, ValueError) as error:
             logger.exception("Unable to synchronize presence roles")
             message = f"❌ Synchronisation impossible : {error}"
@@ -223,11 +258,7 @@ class Presence(commands.Cog):
 
     @property
     def _automation_configured(self) -> bool:
-        settings = self.bot.settings
-        return (
-            settings.presence_channel_id is not None
-            and settings.presence_carrier_role_id is not None
-        )
+        return self.bot.settings.presence_carrier_role_id is not None
 
     async def _get_class(
         self, context: commands.Context[Any], class_name: str
@@ -246,9 +277,22 @@ class Presence(commands.Cog):
             raise commands.NoPrivateMessage()
         return context.guild
 
-    async def _synchronize_presence(self, *, send_notifications: bool) -> list[PresenceAssignment]:
-        channel = await self._notification_channel()
-        guild = channel.guild
+    async def _synchronize_presence(
+        self, *, send_notifications: bool, guild: discord.Guild | None = None
+    ) -> list[PresenceAssignment]:
+        guilds = [guild] if guild is not None else self.bot.guilds
+        assignments: list[PresenceAssignment] = []
+        for current_guild in guilds:
+            assignments.extend(
+                await self._synchronize_guild_presence(
+                    current_guild, send_notifications=send_notifications
+                )
+            )
+        return assignments
+
+    async def _synchronize_guild_presence(
+        self, guild: discord.Guild, *, send_notifications: bool
+    ) -> list[PresenceAssignment]:
         role_id = self.bot.settings.presence_carrier_role_id
         if role_id is None:
             raise ValueError("PRESENCE_CARRIER_ROLE_ID n'est pas configuré.")
@@ -284,6 +328,13 @@ class Presence(commands.Cog):
                     assignment.presence_class, assignment.slot
                 ):
                     continue
+                channel = await self._class_notification_channel(guild, assignment.presence_class)
+                if channel is None:
+                    logger.warning(
+                        "Presence class %s has no notification channel configured",
+                        assignment.presence_class.name,
+                    )
+                    continue
                 await channel.send(
                     f"📋 **Fiche de présence - {assignment.presence_class.name}**\n"
                     f"<@{assignment.holder_id}>, c'est ton tour. Pense à faire signer "
@@ -294,15 +345,19 @@ class Presence(commands.Cog):
                 )
         return assignments
 
-    async def _notification_channel(self) -> discord.TextChannel:
-        channel_id = self.bot.settings.presence_channel_id
+    async def _class_notification_channel(
+        self, guild: discord.Guild, presence_class: PresenceClass
+    ) -> discord.TextChannel | None:
+        channel_id = presence_class.channel_id
         if channel_id is None:
-            raise ValueError("PRESENCE_CHANNEL_ID n'est pas configuré.")
+            return None
         channel = self.bot.get_channel(channel_id)
         if channel is None:
             channel = await self.bot.fetch_channel(channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            raise ValueError("PRESENCE_CHANNEL_ID doit désigner un salon textuel classique.")
+        if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild.id:
+            raise ValueError(
+                f"Le salon configuré pour {presence_class.name} doit être un salon textuel de ce serveur."
+            )
         return channel
 
     @staticmethod
@@ -337,6 +392,11 @@ def _topo_embed(presence_class: PresenceClass, today: date) -> discord.Embed:
             else "⚪ Calendrier ou rotation incomplet"
         )
     embed.add_field(name="Fiche actuelle", value=current_value, inline=False)
+    embed.add_field(
+        name="Salon de notification",
+        value=f"<#{presence_class.channel_id}>" if presence_class.channel_id else "Non défini.",
+        inline=False,
+    )
 
     roster = [
         f"{position}. <@{user_id}>"

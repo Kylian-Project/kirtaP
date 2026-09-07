@@ -19,7 +19,6 @@ class Settings:
     status_message: str
     crous_restaurant_id: int
     crous_channel_id: int | None
-    presence_channel_id: int | None
     presence_carrier_role_id: int | None
     presence_access_role_id: int | None
     presence_database_path: str
@@ -60,7 +59,6 @@ def load_settings(values: Mapping[str, str] | None = None) -> Settings:
         status_message=status_message,
         crous_restaurant_id=_required_id(values, "CROUS_RESTAURANT_ID", default="1392"),
         crous_channel_id=_optional_id(values, "CROUS_CHANNEL_ID"),
-        presence_channel_id=_optional_id(values, "PRESENCE_CHANNEL_ID"),
         presence_carrier_role_id=_optional_id(values, "PRESENCE_CARRIER_ROLE_ID"),
         presence_access_role_id=_optional_id(values, "PRESENCE_ACCESS_ROLE_ID"),
         presence_database_path=presence_database_path,
