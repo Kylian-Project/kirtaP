@@ -5,8 +5,10 @@ import aiosqlite
 import pytest
 
 from kirtap.presence import (
+    PresenceAssignment,
     PresenceClass,
     PresenceStore,
+    RotationSlot,
     SchoolPeriod,
     assignment_for_date,
     next_assignment,
@@ -85,6 +87,8 @@ def test_store_keeps_a_class_roster_and_periods() -> None:
             )
             loaded = await store.get_class(42, "m2 sil")
             assert loaded is not None
+            loaded_by_id = await store.get_class_by_id(42, loaded.id)
+            assert loaded_by_id is not None
             return loaded
         finally:
             await store.close()
@@ -123,6 +127,32 @@ def test_store_migrates_existing_database_with_class_channels(tmp_path) -> None:
             updated = await store.get_class(42, "M2 SIL")
             assert updated is not None
             assert updated.channel_id == 987
+        finally:
+            await store.close()
+
+    asyncio.run(scenario())
+
+
+def test_store_deletes_a_class() -> None:
+    async def scenario() -> None:
+        store = PresenceStore(":memory:")
+        await store.open()
+        try:
+            presence_class = await store.ensure_class(42, "M2 SIL")
+            assert await store.add_member(presence_class, 101)
+            await store.replace_role_holders(
+                42,
+                [
+                    PresenceAssignment(
+                        presence_class=presence_class,
+                        holder_id=101,
+                        slot=RotationSlot(date(2026, 9, 7), date(2026, 9, 7)),
+                    )
+                ],
+            )
+            assert await store.role_holder_for_class(presence_class) == 101
+            assert await store.delete_class(presence_class)
+            assert await store.get_class_by_id(42, presence_class.id) is None
         finally:
             await store.close()
 

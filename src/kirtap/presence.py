@@ -127,6 +127,16 @@ class PresenceStore:
         await cursor.close()
         return await self._class_from_row(row) if row is not None else None
 
+    async def get_class_by_id(self, guild_id: int, class_id: int) -> PresenceClass | None:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "SELECT id, name, channel_id FROM presence_classes WHERE guild_id = ? AND id = ?",
+            (guild_id, class_id),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return await self._class_from_row(row) if row is not None else None
+
     async def list_classes(self, guild_id: int) -> list[PresenceClass]:
         connection = self._require_connection()
         cursor = await connection.execute(
@@ -145,6 +155,26 @@ class PresenceStore:
             (channel_id, presence_class.id),
         )
         await connection.commit()
+
+    async def delete_class(self, presence_class: PresenceClass) -> bool:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "DELETE FROM presence_classes WHERE id = ?", (presence_class.id,)
+        )
+        deleted = cursor.rowcount > 0
+        await cursor.close()
+        await connection.commit()
+        return deleted
+
+    async def role_holder_for_class(self, presence_class: PresenceClass) -> int | None:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "SELECT user_id FROM presence_role_holders WHERE class_id = ?",
+            (presence_class.id,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return int(row[0]) if row is not None else None
 
     async def add_member(self, presence_class: PresenceClass, user_id: int) -> bool:
         connection = self._require_connection()

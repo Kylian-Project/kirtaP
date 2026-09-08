@@ -8,6 +8,8 @@ from discord.ext.commands.view import StringView
 
 from kirtap.bot import KirtaPBot
 from kirtap.cogs.crous import WeekMenuView
+from kirtap.cogs.presence import Presence
+from kirtap.cogs.presence_setup import PresenceSetupView
 from kirtap.config import load_settings
 
 
@@ -62,6 +64,39 @@ def test_access_for_prefix_slash_and_buttons(
         interaction.response.send_message.assert_not_awaited()
         interaction.response.defer.assert_not_awaited()
         view.stop()
+        await bot.close()
+
+    asyncio.run(scenario())
+
+
+def test_presence_setup_panel_is_persistent() -> None:
+    async def synchronize(_: discord.Guild, __: set[int] | None) -> int:
+        return 0
+
+    def topo(_: object) -> discord.Embed:
+        return discord.Embed()
+
+    bot = KirtaPBot(load_settings({"DISCORD_TOKEN": "token"}))
+    panel = PresenceSetupView(bot, synchronize=synchronize, topo=topo, persistent=True)
+
+    assert panel.is_persistent()
+    bot.add_view(panel)
+    asyncio.run(bot.close())
+
+
+def test_presence_exposes_only_setup_and_consultation_commands() -> None:
+    async def scenario() -> None:
+        bot = KirtaPBot(load_settings({"DISCORD_TOKEN": "token"}))
+        await bot.add_cog(Presence(bot))
+        presence = bot.get_command("presence")
+
+        assert isinstance(presence, commands.Group)
+        assert {command.name for command in presence.commands} == {
+            "classes",
+            "setup",
+            "statut",
+            "topo",
+        }
         await bot.close()
 
     asyncio.run(scenario())
