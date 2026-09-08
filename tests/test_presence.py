@@ -85,6 +85,8 @@ def test_store_keeps_a_class_roster_and_periods() -> None:
             )
             loaded = await store.get_class(42, "m2 sil")
             assert loaded is not None
+            loaded_by_id = await store.get_class_by_id(42, loaded.id)
+            assert loaded_by_id is not None
             return loaded
         finally:
             await store.close()

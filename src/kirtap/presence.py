@@ -127,6 +127,16 @@ class PresenceStore:
         await cursor.close()
         return await self._class_from_row(row) if row is not None else None
 
+    async def get_class_by_id(self, guild_id: int, class_id: int) -> PresenceClass | None:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "SELECT id, name, channel_id FROM presence_classes WHERE guild_id = ? AND id = ?",
+            (guild_id, class_id),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return await self._class_from_row(row) if row is not None else None
+
     async def list_classes(self, guild_id: int) -> list[PresenceClass]:
         connection = self._require_connection()
         cursor = await connection.execute(

@@ -13,9 +13,9 @@ from ..presence import (
     PresenceClass,
     assignment_for_date,
     next_assignment,
-    parse_periods,
     rotation_slots,
 )
+from .presence_setup import PresenceSetupView, classes_embed, setup_embed
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 class Presence(commands.Cog):
     def __init__(self, bot: KirtaPBot) -> None:
         self.bot = bot
+        bot.add_view(
+            PresenceSetupView(
+                bot,
+                synchronize=self._synchronize_from_setup,
+                topo=self._topo_from_setup,
+                persistent=True,
+            )
+        )
         if self._automation_configured:
             self.presence_task.start()
         else:
@@ -60,112 +68,33 @@ class Presence(commands.Cog):
     )
     async def presence(self, context: commands.Context[Any]) -> None:
         await context.send(
-            "Utilisez `presence classe_creer`, `presence membre_ajouter`, "
-            "`presence salon_definir`, `presence periodes_definir`, `presence statut` "
-            "ou `presence topo`."
+            "Utilisez `presence setup` pour ouvrir le panneau de configuration, "
+            "`presence classes` pour voir les classes, `presence statut` ou `presence topo`."
         )
 
-    @presence.command(name="classe_creer", help="Crée une classe pour la rotation de présence.")
-    @commands.has_permissions(administrator=True)
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(classe="Exemple : M2 SIL")
-    async def classe_creer(self, context: commands.Context[Any], classe: str) -> None:
+    @presence.command(name="classes", help="Affiche les classes de présence configurées.")
+    async def classes(self, context: commands.Context[Any]) -> None:
         guild = self._guild_from_context(context)
-        try:
-            presence_class = await self.bot.presence_store.ensure_class(guild.id, classe)
-        except ValueError as error:
-            await context.send(f"❌ {error}", ephemeral=context.interaction is not None)
-            return
-        await context.send(f"Classe **{presence_class.name}** prête pour la configuration.")
+        await context.send(
+            embed=classes_embed(await self.bot.presence_store.list_classes(guild.id))
+        )
 
-    @presence.command(name="salon_definir", help="Définit le salon des notifications d'une classe.")
+    @presence.command(name="setup", help="Ouvre le panneau de configuration des fiches.")
     @commands.has_permissions(administrator=True)
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(classe="Nom de la classe", salon="Salon des notifications")
-    async def salon_definir(
-        self, context: commands.Context[Any], classe: str, salon: discord.TextChannel
-    ) -> None:
+    async def setup(self, context: commands.Context[Any]) -> None:
         guild = self._guild_from_context(context)
-        if salon.guild.id != guild.id:
-            await context.send("❌ Le salon doit appartenir à ce serveur.")
-            return
-        presence_class = await self._get_class(context, classe)
-        if presence_class is None:
-            return
-        await self.bot.presence_store.set_channel(presence_class, salon.id)
+        classes = await self.bot.presence_store.list_classes(guild.id)
         await context.send(
-            f"Les notifications de **{presence_class.name}** seront envoyées dans {salon.mention}."
-        )
-
-    @presence.command(name="membre_ajouter", help="Ajoute un élève à la fin de la rotation.")
-    @commands.has_permissions(administrator=True)
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(classe="Nom de la classe", membre="Élève à ajouter")
-    async def membre_ajouter(
-        self, context: commands.Context[Any], classe: str, membre: discord.Member
-    ) -> None:
-        presence_class = await self._get_class(context, classe)
-        if presence_class is None:
-            return
-        added = await self.bot.presence_store.add_member(presence_class, membre.id)
-        if not added:
-            await context.send(
-                f"{membre.mention} est déjà dans la rotation de **{presence_class.name}**."
-            )
-            return
-        await context.send(
-            f"{membre.mention} est ajouté à la rotation de **{presence_class.name}**."
-        )
-
-    @presence.command(name="membre_retirer", help="Retire un élève de la rotation.")
-    @commands.has_permissions(administrator=True)
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(classe="Nom de la classe", membre="Élève à retirer")
-    async def membre_retirer(
-        self, context: commands.Context[Any], classe: str, membre: discord.Member
-    ) -> None:
-        presence_class = await self._get_class(context, classe)
-        if presence_class is None:
-            return
-        removed = await self.bot.presence_store.remove_member(presence_class, membre.id)
-        if not removed:
-            await context.send(
-                f"{membre.mention} n'est pas dans la rotation de **{presence_class.name}**."
-            )
-            return
-        await context.send(
-            f"{membre.mention} est retiré de la rotation de **{presence_class.name}**."
-        )
-
-    @presence.command(
-        name="periodes_definir", help="Remplace le calendrier de formation d'une classe."
-    )
-    @commands.has_permissions(administrator=True)
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(
-        classe="Nom de la classe",
-        periodes="Périodes séparées par un espace ou un retour à la ligne : AAAA-MM-JJ,AAAA-MM-JJ",
-    )
-    async def periodes_definir(
-        self, context: commands.Context[Any], classe: str, *, periodes: str
-    ) -> None:
-        presence_class = await self._get_class(context, classe)
-        if presence_class is None:
-            return
-        try:
-            parsed_periods = parse_periods(periodes)
-        except ValueError as error:
-            await context.send(f"❌ {error}", ephemeral=context.interaction is not None)
-            return
-        await self.bot.presence_store.replace_periods(presence_class, parsed_periods)
-        await context.send(
-            f"Calendrier de **{presence_class.name}** enregistré avec "
-            f"{len(parsed_periods)} période(s) de formation."
+            embed=setup_embed(classes),
+            view=PresenceSetupView(
+                self.bot,
+                classes=classes,
+                synchronize=self._synchronize_from_setup,
+                topo=self._topo_from_setup,
+                persistent=True,
+            ),
         )
 
     @presence.command(name="statut", help="Affiche les porteurs actuels et les prochains tours.")
@@ -222,25 +151,6 @@ class Presence(commands.Cog):
             if presence_class is not None:
                 await context.send(embed=_topo_embed(presence_class, today))
 
-    @presence.command(name="sync", help="Synchronise immédiatement le rôle du porteur actuel.")
-    @commands.has_permissions(administrator=True)
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.checks.has_permissions(administrator=True)
-    async def sync(self, context: commands.Context[Any]) -> None:
-        if context.interaction:
-            await context.defer(ephemeral=True)
-        try:
-            assignments = await self._synchronize_presence(
-                send_notifications=True, guild=self._guild_from_context(context)
-            )
-        except (discord.Forbidden, discord.HTTPException, ValueError) as error:
-            logger.exception("Unable to synchronize presence roles")
-            message = f"❌ Synchronisation impossible : {error}"
-        else:
-            message = f"Synchronisation terminée : {len(assignments)} porteur(s) actif(s)."
-
-        await context.send(message, ephemeral=context.interaction is not None)
-
     @tasks.loop(time=time(hour=8, tzinfo=PARIS_TIMEZONE))
     async def presence_task(self) -> None:
         try:
@@ -267,7 +177,7 @@ class Presence(commands.Cog):
         presence_class = await self.bot.presence_store.get_class(guild.id, class_name)
         if presence_class is None:
             await context.send(
-                f"❌ La classe **{class_name}** n'existe pas. Créez-la avec `presence classe_creer`."
+                f"❌ La classe **{class_name}** n'existe pas. Créez-la avec `presence setup`."
             )
         return presence_class
 
@@ -289,6 +199,15 @@ class Presence(commands.Cog):
                 )
             )
         return assignments
+
+    async def _synchronize_from_setup(self, guild: discord.Guild) -> int:
+        assignments = await self._synchronize_presence(send_notifications=True, guild=guild)
+        return len(assignments)
+
+    @staticmethod
+    def _topo_from_setup(presence_class: PresenceClass) -> discord.Embed:
+        today = datetime.now(PARIS_TIMEZONE).date()
+        return _topo_embed(presence_class, today)
 
     async def _synchronize_guild_presence(
         self, guild: discord.Guild, *, send_notifications: bool

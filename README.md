@@ -36,11 +36,15 @@ Les menus sont envoyés sous forme d'image directement générée par l'API CROU
 
 Les commandes `/presence` sont réservées au rôle configuré dans `PRESENCE_ACCESS_ROLE_ID`.
 
-1. Crée une classe avec `/presence classe_creer`.
-2. Associe son salon de notification avec `/presence salon_definir`.
-3. Ajoute les élèves dans l'ordre de rotation avec `/presence membre_ajouter`.
-4. Remplace son calendrier avec `/presence periodes_definir` en collant les périodes `AAAA-MM-JJ,AAAA-MM-JJ`, séparées par des espaces ou des retours à la ligne.
-5. Utilise `/presence sync` pour tester le rôle et la notification, puis `/presence statut` pour contrôler le résultat.
+Les commandes qui modifient la configuration exigent aussi la permission Discord
+**Administrateur**. Les membres ayant le rôle SIL peuvent consulter `statut`, `topo` et
+`classes`.
+
+Utilise `/presence setup` pour ouvrir le panneau de configuration :
+création de classe, choix du salon, élèves, calendrier, topo et synchronisation. Le
+panneau reste utilisable après un redémarrage du bot et peut être rouvert à tout moment.
+
+`/presence classes` affiche la liste compacte des classes configurées.
 
 Le bot publie à 08:00 le premier jour de chaque semaine de formation, attribue le rôle au porteur et le retire aux précédents porteurs.
 
