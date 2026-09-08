@@ -166,6 +166,16 @@ class PresenceStore:
         await connection.commit()
         return deleted
 
+    async def role_holder_for_class(self, presence_class: PresenceClass) -> int | None:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "SELECT user_id FROM presence_role_holders WHERE class_id = ?",
+            (presence_class.id,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return int(row[0]) if row is not None else None
+
     async def add_member(self, presence_class: PresenceClass, user_id: int) -> bool:
         connection = self._require_connection()
         cursor = await connection.execute(

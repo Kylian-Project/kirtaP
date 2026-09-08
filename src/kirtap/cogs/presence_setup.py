@@ -7,7 +7,7 @@ import discord
 from ..bot import KirtaPBot
 from ..presence import PresenceClass, parse_periods, rotation_slots
 
-SynchronizeCallback = Callable[[discord.Guild], Awaitable[int]]
+SynchronizeCallback = Callable[[discord.Guild, set[int] | None], Awaitable[int]]
 TopoCallback = Callable[[PresenceClass], discord.Embed]
 
 MAX_SELECT_OPTIONS = 25
@@ -317,7 +317,7 @@ class PresenceClassSetupView(discord.ui.View):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
-            assignments = await self.synchronize(interaction.guild)
+            assignments = await self.synchronize(interaction.guild, None)
         except (discord.Forbidden, discord.HTTPException, ValueError) as error:
             await interaction.followup.send(f"Synchronisation impossible : {error}", ephemeral=True)
             return
@@ -590,12 +590,16 @@ class DeleteClassConfirmationView(discord.ui.View):
                 content="Cette classe n'existe plus.", view=None
             )
             return
+        former_holder = await self.bot.presence_store.role_holder_for_class(presence_class)
         await self.bot.presence_store.delete_class(presence_class)
         await interaction.response.edit_message(
             content=f"Classe {self.class_name} supprimée.", view=None
         )
         try:
-            await self.synchronize(interaction.guild)
+            await self.synchronize(
+                interaction.guild,
+                {former_holder} if former_holder is not None else None,
+            )
         except (discord.Forbidden, discord.HTTPException, ValueError):
             logger.exception("Unable to synchronize presence roles after class deletion")
 

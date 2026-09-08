@@ -5,8 +5,10 @@ import aiosqlite
 import pytest
 
 from kirtap.presence import (
+    PresenceAssignment,
     PresenceClass,
     PresenceStore,
+    RotationSlot,
     SchoolPeriod,
     assignment_for_date,
     next_assignment,
@@ -138,6 +140,17 @@ def test_store_deletes_a_class() -> None:
         try:
             presence_class = await store.ensure_class(42, "M2 SIL")
             assert await store.add_member(presence_class, 101)
+            await store.replace_role_holders(
+                42,
+                [
+                    PresenceAssignment(
+                        presence_class=presence_class,
+                        holder_id=101,
+                        slot=RotationSlot(date(2026, 9, 7), date(2026, 9, 7)),
+                    )
+                ],
+            )
+            assert await store.role_holder_for_class(presence_class) == 101
             assert await store.delete_class(presence_class)
             assert await store.get_class_by_id(42, presence_class.id) is None
         finally:

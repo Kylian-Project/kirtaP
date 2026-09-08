@@ -188,20 +188,32 @@ class Presence(commands.Cog):
         return context.guild
 
     async def _synchronize_presence(
-        self, *, send_notifications: bool, guild: discord.Guild | None = None
+        self,
+        *,
+        send_notifications: bool,
+        guild: discord.Guild | None = None,
+        former_holders: set[int] | None = None,
     ) -> list[PresenceAssignment]:
         guilds = [guild] if guild is not None else self.bot.guilds
         assignments: list[PresenceAssignment] = []
         for current_guild in guilds:
             assignments.extend(
                 await self._synchronize_guild_presence(
-                    current_guild, send_notifications=send_notifications
+                    current_guild,
+                    send_notifications=send_notifications,
+                    former_holders=former_holders if guild is not None else None,
                 )
             )
         return assignments
 
-    async def _synchronize_from_setup(self, guild: discord.Guild) -> int:
-        assignments = await self._synchronize_presence(send_notifications=True, guild=guild)
+    async def _synchronize_from_setup(
+        self, guild: discord.Guild, former_holders: set[int] | None
+    ) -> int:
+        assignments = await self._synchronize_presence(
+            send_notifications=True,
+            guild=guild,
+            former_holders=former_holders,
+        )
         return len(assignments)
 
     @staticmethod
@@ -210,7 +222,11 @@ class Presence(commands.Cog):
         return _topo_embed(presence_class, today)
 
     async def _synchronize_guild_presence(
-        self, guild: discord.Guild, *, send_notifications: bool
+        self,
+        guild: discord.Guild,
+        *,
+        send_notifications: bool,
+        former_holders: set[int] | None,
     ) -> list[PresenceAssignment]:
         role_id = self.bot.settings.presence_carrier_role_id
         if role_id is None:
@@ -228,6 +244,7 @@ class Presence(commands.Cog):
         ]
         current_holders = {assignment.holder_id for assignment in assignments}
         previous_holders = await self.bot.presence_store.role_holders(guild.id)
+        previous_holders.update(former_holders or set())
 
         for user_id in previous_holders - current_holders:
             member = await self._fetch_member(guild, user_id)

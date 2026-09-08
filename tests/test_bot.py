@@ -70,7 +70,7 @@ def test_access_for_prefix_slash_and_buttons(
 
 
 def test_presence_setup_panel_is_persistent() -> None:
-    async def synchronize(_: discord.Guild) -> int:
+    async def synchronize(_: discord.Guild, __: set[int] | None) -> int:
         return 0
 
     def topo(_: object) -> discord.Embed:
