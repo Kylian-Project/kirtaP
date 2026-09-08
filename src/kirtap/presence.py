@@ -156,6 +156,16 @@ class PresenceStore:
         )
         await connection.commit()
 
+    async def delete_class(self, presence_class: PresenceClass) -> bool:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "DELETE FROM presence_classes WHERE id = ?", (presence_class.id,)
+        )
+        deleted = cursor.rowcount > 0
+        await cursor.close()
+        await connection.commit()
+        return deleted
+
     async def add_member(self, presence_class: PresenceClass, user_id: int) -> bool:
         connection = self._require_connection()
         cursor = await connection.execute(

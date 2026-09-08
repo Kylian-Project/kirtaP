@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
@@ -10,6 +11,8 @@ SynchronizeCallback = Callable[[discord.Guild], Awaitable[int]]
 TopoCallback = Callable[[PresenceClass], discord.Embed]
 
 MAX_SELECT_OPTIONS = 25
+
+logger = logging.getLogger(__name__)
 
 
 def classes_embed(classes: Iterable[PresenceClass]) -> discord.Embed:
@@ -248,6 +251,26 @@ class PresenceClassSetupView(discord.ui.View):
         await interaction.response.edit_message(
             embed=roster_embed(presence_class),
             view=RosterView(
+                self.bot,
+                presence_class,
+                interaction.guild,
+                synchronize=self.synchronize,
+                topo=self.topo,
+            ),
+        )
+
+    @discord.ui.button(label="Supprimer la classe", style=discord.ButtonStyle.danger, row=3)
+    async def delete_class(
+        self, interaction: discord.Interaction[Any], _: discord.ui.Button[Any]
+    ) -> None:
+        presence_class = await self.get_class(interaction)
+        if presence_class is None or interaction.guild is None:
+            await interaction.response.send_message("Cette classe n'existe plus.", ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            content=f"Supprimer {presence_class.name} ?",
+            embed=None,
+            view=DeleteClassConfirmationView(
                 self.bot,
                 presence_class,
                 interaction.guild,
@@ -526,6 +549,82 @@ class RosterRemoveConfirmationView(discord.ui.View):
             return
         await self.roster_view.show_roster(
             interaction, presence_class, "Aucune modification enregistrée."
+        )
+
+
+class DeleteClassConfirmationView(discord.ui.View):
+    def __init__(
+        self,
+        bot: KirtaPBot,
+        presence_class: PresenceClass,
+        guild: discord.Guild,
+        *,
+        synchronize: SynchronizeCallback,
+        topo: TopoCallback,
+    ) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.class_id = presence_class.id
+        self.class_name = presence_class.name
+        self.guild = guild
+        self.synchronize = synchronize
+        self.topo = topo
+
+    async def interaction_check(self, interaction: discord.Interaction[Any]) -> bool:
+        return await _check_administrator(self.bot, interaction)
+
+    @discord.ui.button(label="Supprimer définitivement", style=discord.ButtonStyle.danger)
+    async def confirm(
+        self, interaction: discord.Interaction[Any], _: discord.ui.Button[Any]
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.edit_message(
+                content="Cette classe n'existe plus.", view=None
+            )
+            return
+        presence_class = await self.bot.presence_store.get_class_by_id(
+            interaction.guild.id, self.class_id
+        )
+        if presence_class is None:
+            await interaction.response.edit_message(
+                content="Cette classe n'existe plus.", view=None
+            )
+            return
+        await self.bot.presence_store.delete_class(presence_class)
+        await interaction.response.edit_message(
+            content=f"Classe {self.class_name} supprimée.", view=None
+        )
+        try:
+            await self.synchronize(interaction.guild)
+        except (discord.Forbidden, discord.HTTPException, ValueError):
+            logger.exception("Unable to synchronize presence roles after class deletion")
+
+    @discord.ui.button(label="Annuler", style=discord.ButtonStyle.secondary)
+    async def cancel(
+        self, interaction: discord.Interaction[Any], _: discord.ui.Button[Any]
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.edit_message(
+                content="Cette classe n'existe plus.", view=None
+            )
+            return
+        presence_class = await self.bot.presence_store.get_class_by_id(
+            interaction.guild.id, self.class_id
+        )
+        if presence_class is None:
+            await interaction.response.edit_message(
+                content="Cette classe n'existe plus.", view=None
+            )
+            return
+        await interaction.response.edit_message(
+            embed=class_setup_embed(presence_class),
+            content=None,
+            view=PresenceClassSetupView(
+                self.bot,
+                presence_class.id,
+                synchronize=self.synchronize,
+                topo=self.topo,
+            ),
         )
 
 

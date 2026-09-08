@@ -129,3 +129,18 @@ def test_store_migrates_existing_database_with_class_channels(tmp_path) -> None:
             await store.close()
 
     asyncio.run(scenario())
+
+
+def test_store_deletes_a_class() -> None:
+    async def scenario() -> None:
+        store = PresenceStore(":memory:")
+        await store.open()
+        try:
+            presence_class = await store.ensure_class(42, "M2 SIL")
+            assert await store.add_member(presence_class, 101)
+            assert await store.delete_class(presence_class)
+            assert await store.get_class_by_id(42, presence_class.id) is None
+        finally:
+            await store.close()
+
+    asyncio.run(scenario())
