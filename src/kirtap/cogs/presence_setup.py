@@ -78,8 +78,7 @@ def class_setup_embed(presence_class: PresenceClass, *, notice: str | None = Non
 def roster_embed(presence_class: PresenceClass, *, notice: str | None = None) -> discord.Embed:
     embed = discord.Embed(
         title=f"Rotation - {presence_class.name}",
-        description=notice
-        or "Choisissez un élève, puis confirmez la modification avant son enregistrement.",
+        description=notice,
         color=discord.Color.blurple(),
     )
     embed.add_field(
@@ -94,19 +93,13 @@ def roster_embed(presence_class: PresenceClass, *, notice: str | None = None) ->
     return embed
 
 
-def roster_confirmation_embed(
-    presence_class: PresenceClass, *, action: str, member_mention: str
+def remove_confirmation_embed(
+    presence_class: PresenceClass, *, member_mention: str
 ) -> discord.Embed:
-    if action == "add":
-        description = f"Ajouter {member_mention} en position {len(presence_class.member_ids) + 1} ?"
-        color = discord.Color.green()
-    else:
-        description = f"Retirer {member_mention} de la rotation ?"
-        color = discord.Color.red()
     return discord.Embed(
-        title=f"Confirmer la modification - {presence_class.name}",
-        description=description,
-        color=color,
+        title=f"Confirmer le retrait - {presence_class.name}",
+        description=f"Retirer {member_mention} de la rotation ?",
+        color=discord.Color.red(),
     )
 
 
@@ -425,19 +418,20 @@ class RosterAddPicker(discord.ui.UserSelect[Any]):
                 interaction, presence_class, f"{member.mention} est déjà dans la rotation."
             )
             return
-        await interaction.response.edit_message(
-            embed=roster_confirmation_embed(
-                presence_class,
-                action="add",
-                member_mention=member.mention,
-            ),
-            view=RosterConfirmationView(
-                self.roster_view,
-                action="add",
-                member_id=member.id,
-                member_mention=member.mention,
-            ),
+        added = await self.roster_view.bot.presence_store.add_member(presence_class, member.id)
+        updated_class = await self.roster_view.get_class(interaction)
+        if updated_class is None:
+            await interaction.response.edit_message(
+                content="Cette classe n'existe plus.", embed=None, view=None
+            )
+            return
+        position = updated_class.member_ids.index(member.id) + 1
+        notice = (
+            f"{member.mention} a été ajouté en position {position}."
+            if added
+            else f"{member.mention} est déjà dans la rotation."
         )
+        await self.roster_view.show_roster(interaction, updated_class, notice)
 
 
 class RosterRemoveSelect(discord.ui.Select[Any]):
@@ -475,27 +469,19 @@ class RosterRemoveSelect(discord.ui.Select[Any]):
             )
             return
         await interaction.response.edit_message(
-            embed=roster_confirmation_embed(
-                presence_class,
-                action="remove",
-                member_mention=f"<@{member_id}>",
-            ),
-            view=RosterConfirmationView(
+            embed=remove_confirmation_embed(presence_class, member_mention=f"<@{member_id}>"),
+            view=RosterRemoveConfirmationView(
                 self.roster_view,
-                action="remove",
                 member_id=member_id,
                 member_mention=f"<@{member_id}>",
             ),
         )
 
 
-class RosterConfirmationView(discord.ui.View):
-    def __init__(
-        self, roster_view: RosterView, *, action: str, member_id: int, member_mention: str
-    ) -> None:
+class RosterRemoveConfirmationView(discord.ui.View):
+    def __init__(self, roster_view: RosterView, *, member_id: int, member_mention: str) -> None:
         super().__init__(timeout=300)
         self.roster_view = roster_view
-        self.action = action
         self.member_id = member_id
         self.member_mention = member_mention
 
@@ -512,24 +498,14 @@ class RosterConfirmationView(discord.ui.View):
                 content="Cette classe n'existe plus.", embed=None, view=None
             )
             return
-        if self.action == "add":
-            changed = await self.roster_view.bot.presence_store.add_member(
-                presence_class, self.member_id
-            )
-            notice = (
-                f"{self.member_mention} a été ajouté en position {len(presence_class.member_ids) + 1}."
-                if changed
-                else f"{self.member_mention} est déjà dans la rotation."
-            )
-        else:
-            changed = await self.roster_view.bot.presence_store.remove_member(
-                presence_class, self.member_id
-            )
-            notice = (
-                f"{self.member_mention} a été retiré de la rotation."
-                if changed
-                else f"{self.member_mention} n'est plus dans la rotation."
-            )
+        changed = await self.roster_view.bot.presence_store.remove_member(
+            presence_class, self.member_id
+        )
+        notice = (
+            f"{self.member_mention} a été retiré de la rotation."
+            if changed
+            else f"{self.member_mention} n'est plus dans la rotation."
+        )
         updated_class = await self.roster_view.get_class(interaction)
         if updated_class is None:
             await interaction.response.edit_message(
