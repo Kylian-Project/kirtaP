@@ -24,6 +24,7 @@ uv run kirtap
 | `STATUS_MESSAGE` | Non | Statut affiché par le bot. |
 | `CROUS_RESTAURANT_ID` | Non | Restaurant CROUS, `1392` par défaut. |
 | `CROUS_CHANNEL_ID` | Non | Canal de publication automatique du menu à 08:00 Europe/Paris. |
+| `ADE_ICAL_URL` | Non | URL publique iCalendar ADE utilisée par `fugue`. |
 | `PRESENCE_CARRIER_ROLE_ID` | Oui pour les fiches de présence | Rôle attribué au porteur actuel. |
 | `PRESENCE_ACCESS_ROLE_ID` | Oui pour les fiches de présence | Rôle autorisé à gérer les rotations. |
 | `PRESENCE_DATABASE_PATH` | Non | Base SQLite, `data/presence.db` par défaut. |

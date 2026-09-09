@@ -1,6 +1,7 @@
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -19,6 +20,7 @@ class Settings:
     status_message: str
     crous_restaurant_id: int
     crous_channel_id: int | None
+    ade_ical_url: str | None
     presence_carrier_role_id: int | None
     presence_access_role_id: int | None
     presence_database_path: str
@@ -50,6 +52,12 @@ def load_settings(values: Mapping[str, str] | None = None) -> Settings:
     if not presence_database_path:
         raise ConfigurationError("PRESENCE_DATABASE_PATH ne peut pas être vide.")
 
+    ade_ical_url = values.get("ADE_ICAL_URL", "").strip() or None
+    if ade_ical_url is not None:
+        parsed_ade_ical_url = urlparse(ade_ical_url)
+        if parsed_ade_ical_url.scheme not in {"http", "https"} or not parsed_ade_ical_url.netloc:
+            raise ConfigurationError("ADE_ICAL_URL doit être une URL HTTP ou HTTPS.")
+
     return Settings(
         discord_token=token,
         owner_id=_optional_id(values, "OWNER_ID"),
@@ -59,6 +67,7 @@ def load_settings(values: Mapping[str, str] | None = None) -> Settings:
         status_message=status_message,
         crous_restaurant_id=_required_id(values, "CROUS_RESTAURANT_ID", default="1392"),
         crous_channel_id=_optional_id(values, "CROUS_CHANNEL_ID"),
+        ade_ical_url=ade_ical_url,
         presence_carrier_role_id=_optional_id(values, "PRESENCE_CARRIER_ROLE_ID"),
         presence_access_role_id=_optional_id(values, "PRESENCE_ACCESS_ROLE_ID"),
         presence_database_path=presence_database_path,
