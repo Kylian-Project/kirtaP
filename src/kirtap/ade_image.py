@@ -152,7 +152,7 @@ def _draw_header(draw: ImageDraw.ImageDraw, week_start: date) -> None:
     title_font = _font("DejaVuSans-Bold.ttf", 58)
     subtitle_font = _font("DejaVuSans.ttf", 31)
     draw.rounded_rectangle((PADDING, PADDING, PADDING + 10, PADDING + 126), radius=5, fill=ACCENT)
-    draw.text((PADDING + 34, PADDING - 2), "Planning des chenanpans", font=title_font, fill=WHITE)
+    draw.text((PADDING + 34, PADDING - 2), "Planning des chenapans", font=title_font, fill=WHITE)
     week_end = week_start + timedelta(days=4)
     subtitle = f"Semaine du {_format_date(week_start)} au {_format_date(week_end, year=True)}"
     draw.text((PADDING + 38, PADDING + 79), subtitle, font=subtitle_font, fill="#C9D6EE")
