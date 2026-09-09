@@ -19,6 +19,7 @@ def test_loads_defaults() -> None:
     assert settings.log_level == "INFO"
     assert settings.crous_restaurant_id == 1392
     assert settings.crous_channel_id is None
+    assert settings.ade_ical_url is None
     assert settings.presence_carrier_role_id is None
     assert settings.presence_access_role_id is None
     assert settings.presence_database_path == "data/presence.db"
@@ -45,7 +46,13 @@ def test_rejects_invalid_optional_ids(name: str, value: str) -> None:
 
 @pytest.mark.parametrize(
     "name, value",
-    [("COMMAND_PREFIX", " "), ("LOG_LEVEL", "VERBOSE"), ("ENVIRONMENT", "staging")],
+    [
+        ("COMMAND_PREFIX", " "),
+        ("LOG_LEVEL", "VERBOSE"),
+        ("ENVIRONMENT", "staging"),
+        ("ADE_ICAL_URL", "ftp://ade.example/planning"),
+        ("ADE_ICAL_URL", "https://"),
+    ],
 )
 def test_rejects_invalid_settings(name: str, value: str) -> None:
     with pytest.raises(ConfigurationError, match=name):

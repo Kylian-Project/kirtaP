@@ -12,6 +12,10 @@ WORKDIR /app
 
 COPY --from=uv /uv /uvx /bin/
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --create-home --uid 10001 kirtap \
     && mkdir /data \
     && chown kirtap:kirtap /data
