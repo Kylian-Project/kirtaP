@@ -90,7 +90,7 @@ def test_ade_week_filter_and_schedule_image_show_only_the_current_week() -> None
     image_data = render_week_schedule(events, reference=date(2026, 9, 9))
 
     assert [event.identifier for event in current_week] == ["ade-1", "ade-2"]
-    assert schedule_image_filename(reference=date(2026, 9, 9)) == "planning-ade-2026-09-07.png"
+    assert schedule_image_filename(reference=date(2026, 9, 9)) == "planning-ade-2026-09-09.png"
     with Image.open(BytesIO(image_data)) as image:
         assert image.format == "PNG"
         assert image.width == 1400
