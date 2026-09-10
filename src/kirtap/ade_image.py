@@ -58,38 +58,38 @@ class _EventLayout:
 
 def render_week_schedule(events: list[AdeEvent], *, reference: date | None = None) -> bytes:
     reference = reference or datetime.now(PARIS_TIMEZONE).date()
-    week_start = reference - timedelta(days=reference.weekday())
+    display_reference = _next_school_day(reference)
     title_font = _font("DejaVuSans-Bold.ttf", 32)
     event_title_font = _font("DejaVuSans.ttf", 30)
     event_time_font = _font("DejaVuSans-Bold.ttf", 28)
     title_width = WIDTH - (PADDING * 2) - (EVENT_PADDING * 2)
+    display_days = _remaining_weekdays(display_reference)
 
     events_by_day: dict[date, list[AdeEvent]] = defaultdict(list)
-    for event in events_for_week(events, reference=reference):
+    for event in events_for_week(events, reference=display_reference):
         events_by_day[event.starts_at.date()].append(event)
 
     layouts = [
         _day_layout(
-            events_by_day[week_start + timedelta(days=offset)],
+            events_by_day[current_day],
             event_title_font,
             title_width,
         )
-        for offset in range(len(WEEKDAYS))
+        for current_day in display_days
     ]
     image_height = (
         PADDING
         + HEADER_HEIGHT
         + sum(DAY_HEADER_HEIGHT + DAY_PADDING * 2 + _layout_height(layout) for layout in layouts)
-        + DAY_GAP * (len(WEEKDAYS) - 1)
+        + DAY_GAP * max(0, len(display_days) - 1)
         + 66
     )
     image = Image.new("RGB", (WIDTH, image_height), BACKGROUND)
     draw = ImageDraw.Draw(image)
 
-    _draw_header(draw, week_start)
+    _draw_header(draw, display_days[0], display_days[-1])
     current_y = PADDING + HEADER_HEIGHT
-    for offset, (weekday, layout) in enumerate(zip(WEEKDAYS, layouts, strict=True)):
-        current_day = week_start + timedelta(days=offset)
+    for current_day, layout in zip(display_days, layouts, strict=True):
         card_height = DAY_HEADER_HEIGHT + DAY_PADDING * 2 + _layout_height(layout)
         _draw_day(
             draw,
@@ -97,9 +97,9 @@ def render_week_schedule(events: list[AdeEvent], *, reference: date | None = Non
             y=current_y,
             width=WIDTH - PADDING * 2,
             height=card_height,
-            weekday=weekday,
+            weekday=WEEKDAYS[current_day.weekday()],
             current_day=current_day,
-            is_today=current_day == reference,
+            is_today=current_day == display_reference,
             layout=layout,
             day_font=title_font,
             time_font=event_time_font,
@@ -118,8 +118,7 @@ def render_week_schedule(events: list[AdeEvent], *, reference: date | None = Non
 
 def schedule_image_filename(*, reference: date | None = None) -> str:
     reference = reference or datetime.now(PARIS_TIMEZONE).date()
-    week_start = reference - timedelta(days=reference.weekday())
-    return f"planning-ade-{week_start:%Y-%m-%d}.png"
+    return f"planning-ade-{reference:%Y-%m-%d}.png"
 
 
 def _day_layout(
@@ -148,13 +147,24 @@ def _layout_height(layout: tuple[_EventLayout, ...]) -> int:
     return sum(event_layout.height for event_layout in layout) + EVENT_GAP * (len(layout) - 1)
 
 
-def _draw_header(draw: ImageDraw.ImageDraw, week_start: date) -> None:
+def _next_school_day(reference: date) -> date:
+    if reference.weekday() >= len(WEEKDAYS):
+        return reference + timedelta(days=7 - reference.weekday())
+    return reference
+
+
+def _remaining_weekdays(reference: date) -> tuple[date, ...]:
+    return tuple(
+        reference + timedelta(days=offset) for offset in range(len(WEEKDAYS) - reference.weekday())
+    )
+
+
+def _draw_header(draw: ImageDraw.ImageDraw, first_day: date, last_day: date) -> None:
     title_font = _font("DejaVuSans-Bold.ttf", 58)
     subtitle_font = _font("DejaVuSans.ttf", 31)
     draw.rounded_rectangle((PADDING, PADDING, PADDING + 10, PADDING + 126), radius=5, fill=ACCENT)
     draw.text((PADDING + 34, PADDING - 2), "Planning des chenapans", font=title_font, fill=WHITE)
-    week_end = week_start + timedelta(days=4)
-    subtitle = f"Semaine du {_format_date(week_start)} au {_format_date(week_end, year=True)}"
+    subtitle = f"Du {_format_date(first_day)} au {_format_date(last_day, year=True)}"
     draw.text((PADDING + 38, PADDING + 79), subtitle, font=subtitle_font, fill="#C9D6EE")
 
 

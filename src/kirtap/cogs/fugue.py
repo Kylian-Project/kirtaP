@@ -44,13 +44,14 @@ class Fugue(commands.Cog):
             await context.send(embed=_error_embed())
             return
         reference = datetime.now(PARIS_TIMEZONE).date()
-        await context.send(
+        message = await context.send(
             file=discord.File(
                 BytesIO(render_week_schedule(events, reference=reference)),
                 filename=schedule_image_filename(reference=reference),
                 description="Mouahahahahahaha !!",
             )
         )
+        await message.delete(delay=60)
 
 
 def _configuration_embed() -> discord.Embed:
