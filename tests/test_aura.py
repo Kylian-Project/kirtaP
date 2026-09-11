@@ -8,6 +8,7 @@ def test_aura_moves_are_unique_and_can_be_selected() -> None:
     assert names == [
         "6/7",
         "6/7 au sol",
+        "6/7 double dab",
         "Dab",
         "Dab 360 no scope",
         "Floss",
