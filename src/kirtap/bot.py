@@ -17,6 +17,7 @@ EXTENSIONS = (
     "kirtap.cogs.presence",
     "kirtap.cogs.crous",
     "kirtap.cogs.fugue",
+    "kirtap.cogs.aura",
     "kirtap.cogs.fun",
 )
 
