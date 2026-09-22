@@ -33,6 +33,10 @@ uv run kirtap
 
 Les menus sont envoyés sous forme d'image directement générée par l'API CROUStillant. Les commandes disponibles sont `/menu [date]` et `/menu_semaine`.
 
+## Choix du midi
+
+Utilisez `/midi ajouter` pour proposer un restaurant, `/midi liste` pour vérifier la liste, puis `/midi lancer` dans le salon où le vote doit être envoyé. Le bot publie un sondage Discord d'une heure à choix unique et vide la liste après son envoi. La permission Discord `Envoyer des sondages` est nécessaire au bot dans ce salon.
+
 ## Fiches de présence
 
 Les commandes `/presence` sont réservées au rôle configuré dans `PRESENCE_ACCESS_ROLE_ID`.

@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from .config import Settings
+from .lunch import LunchStore
 from .presence import PresenceStore
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ EXTENSIONS = (
     "kirtap.cogs.crous",
     "kirtap.cogs.fugue",
     "kirtap.cogs.aura",
+    "kirtap.cogs.midi",
     "kirtap.cogs.fun",
 )
 
@@ -35,6 +37,7 @@ class KirtaPBot(commands.Bot):
         self.settings = settings
         self.http_session: aiohttp.ClientSession | None = None
         self.presence_store = PresenceStore(settings.presence_database_path)
+        self.lunch_store = LunchStore(settings.presence_database_path)
         self.tree.interaction_check = self.interaction_check
         self.tree.on_error = self.on_app_command_error
 
@@ -53,6 +56,7 @@ class KirtaPBot(commands.Bot):
     async def setup_hook(self) -> None:
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
         await self.presence_store.open()
+        await self.lunch_store.open()
         for extension in EXTENSIONS:
             await self.load_extension(extension)
             logger.info("Loaded extension %s", extension)
@@ -63,6 +67,7 @@ class KirtaPBot(commands.Bot):
     async def close(self) -> None:
         if self.http_session is not None and not self.http_session.closed:
             await self.http_session.close()
+        await self.lunch_store.close()
         await self.presence_store.close()
         await super().close()
 
