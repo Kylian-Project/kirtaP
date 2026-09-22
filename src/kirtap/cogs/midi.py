@@ -22,7 +22,7 @@ class Midi(commands.Cog):
     async def midi(self, context: commands.Context[Any]) -> None:
         await _reply(
             context,
-            "Utilisez `midi ajouter`, `midi liste`, `midi retirer`, `midi lancer` ou `midi clear`.",
+            "Utilisez `midi remplir`, `midi liste`, `midi retirer`, `midi lancer` ou `midi clear`.",
         )
 
     @midi.command(name="ajouter", help="Ajoute un restaurant à la liste.")
@@ -39,6 +39,13 @@ class Midi(commands.Cog):
             await _reply(context, str(error))
             return
         await _reply(context, f"Ajouté : {restaurant.name}")
+
+    @midi.command(name="remplir", help="Ajoute plusieurs restaurants avec une popup.")
+    async def remplir(self, context: commands.Context[Any]) -> None:
+        if context.interaction is None:
+            await _reply(context, "Utilisez `/midi remplir` pour ouvrir la popup.")
+            return
+        await context.interaction.response.send_modal(RestaurantBatchModal(self.bot))
 
     @midi.command(name="liste", help="Affiche les restaurants proposés.")
     async def liste(self, context: commands.Context[Any]) -> None:
@@ -108,6 +115,55 @@ def restaurant_poll(
     for restaurant in restaurants:
         poll.add_answer(text=restaurant.name)
     return poll
+
+
+class RestaurantBatchModal(discord.ui.Modal, title="Restaurants"):
+    restaurants = discord.ui.TextInput(
+        label="Un restaurant par ligne",
+        placeholder="Crous Esplanade\nMcDonald's | https://maps.google.com/...",
+        style=discord.TextStyle.paragraph,
+        max_length=4000,
+    )
+
+    def __init__(self, bot: KirtaPBot) -> None:
+        super().__init__()
+        self.bot = bot
+
+    async def on_submit(self, interaction: discord.Interaction[Any]) -> None:
+        if interaction.guild_id is None or not self.bot.can_use_bot(interaction.user):
+            await interaction.response.send_message("Commande réservée au serveur.", ephemeral=True)
+            return
+
+        added, errors = await add_restaurants_from_text(
+            self.bot, interaction.guild_id, self.restaurants.value
+        )
+        if not added:
+            message = "Aucun restaurant ajouté."
+        else:
+            message = f"{len(added)} restaurant(s) ajouté(s)."
+        if errors:
+            message = f"{message}\n" + "\n".join(errors)
+        await interaction.response.send_message(message, ephemeral=True)
+
+
+async def add_restaurants_from_text(
+    bot: KirtaPBot, guild_id: int, text: str
+) -> tuple[list[Restaurant], list[str]]:
+    added = []
+    errors = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        name, separator, link = line.partition("|")
+        try:
+            restaurant = await bot.lunch_store.add_restaurant(
+                guild_id, name, link if separator else None
+            )
+        except ValueError as error:
+            errors.append(f"Ligne {line_number} : {error}")
+        else:
+            added.append(restaurant)
+    return added, errors
 
 
 async def _reply(
