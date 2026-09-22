@@ -11,7 +11,7 @@ def test_restaurant_list_is_ordered_and_can_be_reused() -> None:
         store = LunchStore(":memory:")
         await store.open()
         first = await store.add_restaurant(42, "Le Bistrot", "https://maps.google.com/?q=bistrot")
-        second = await store.add_restaurant(42, "La Cantine", None)
+        await store.add_restaurant(42, "La Cantine", None)
 
         restaurants = await store.list_restaurants(42)
         assert [restaurant.name for restaurant in restaurants] == ["Le Bistrot", "La Cantine"]
@@ -29,8 +29,9 @@ def test_restaurant_list_is_ordered_and_can_be_reused() -> None:
         assert removed == first
         assert [restaurant.position for restaurant in await store.list_restaurants(42)] == [1]
 
-        await store.remove_restaurants(42, [second])
+        assert await store.clear_restaurants(42) is True
         assert await store.list_restaurants(42) == []
+        assert await store.clear_restaurants(42) is False
         await store.close()
 
     asyncio.run(scenario())

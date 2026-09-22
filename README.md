@@ -35,7 +35,7 @@ Les menus sont envoyés sous forme d'image directement générée par l'API CROU
 
 ## Choix du midi
 
-Utilisez `/midi ajouter` pour proposer un restaurant, `/midi liste` pour vérifier la liste, puis `/midi lancer` dans le salon où le vote doit être envoyé. Le bot publie un sondage Discord à choix unique, d'une heure par défaut (jusqu'à 168 heures avec `/midi lancer duree:<heures>`), et vide la liste après son envoi. La permission Discord `Envoyer des sondages` est nécessaire au bot dans ce salon.
+Utilisez `/midi ajouter` pour proposer un restaurant, `/midi liste` pour vérifier la liste, puis `/midi lancer` dans le salon où le vote doit être envoyé. Le bot publie un sondage Discord à choix unique, d'une heure par défaut (jusqu'à 168 heures avec `/midi lancer duree:<heures>`). La liste reste disponible pour les prochains votes, jusqu'à `/midi clear`. La permission Discord `Envoyer des sondages` est nécessaire au bot dans ce salon.
 
 ## Fiches de présence
 

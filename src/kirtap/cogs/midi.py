@@ -21,7 +21,8 @@ class Midi(commands.Cog):
     )
     async def midi(self, context: commands.Context[Any]) -> None:
         await _reply(
-            context, "Utilisez `midi ajouter`, `midi liste`, `midi retirer` ou `midi lancer`."
+            context,
+            "Utilisez `midi ajouter`, `midi liste`, `midi retirer`, `midi lancer` ou `midi clear`.",
         )
 
     @midi.command(name="ajouter", help="Ajoute un restaurant à la liste.")
@@ -62,6 +63,14 @@ class Midi(commands.Cog):
             return
         await _reply(context, f"Retiré : {restaurant.name}")
 
+    @midi.command(name="clear", help="Supprime toutes les propositions.")
+    async def clear(self, context: commands.Context[Any]) -> None:
+        guild = _require_guild(context)
+        if guild is None:
+            return
+        cleared = await self.bot.lunch_store.clear_restaurants(guild.id)
+        await _reply(context, "Liste effacée." if cleared else "La liste est déjà vide.")
+
     @midi.command(name="lancer", help="Lance le vote dans ce salon.")
     @commands.bot_has_permissions(send_polls=True)
     @app_commands.checks.bot_has_permissions(send_polls=True)
@@ -80,7 +89,6 @@ class Midi(commands.Cog):
             await _reply(context, "Ajoutez au moins deux restaurants avant de lancer le vote.")
             return
         await context.send(poll=restaurant_poll(restaurants, duree))
-        await self.bot.lunch_store.remove_restaurants(guild.id, restaurants)
 
 
 def restaurants_embed(restaurants: list[Restaurant]) -> discord.Embed:
