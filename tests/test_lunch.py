@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from kirtap.cogs.midi import restaurant_poll, restaurants_embed
+from kirtap.cogs.midi import add_restaurants_from_text, restaurant_poll, restaurants_embed
 from kirtap.lunch import LunchStore
 
 
@@ -11,7 +11,7 @@ def test_restaurant_list_is_ordered_and_can_be_reused() -> None:
         store = LunchStore(":memory:")
         await store.open()
         first = await store.add_restaurant(42, "Le Bistrot", "https://maps.google.com/?q=bistrot")
-        second = await store.add_restaurant(42, "La Cantine", None)
+        await store.add_restaurant(42, "La Cantine", None)
 
         restaurants = await store.list_restaurants(42)
         assert [restaurant.name for restaurant in restaurants] == ["Le Bistrot", "La Cantine"]
@@ -29,8 +29,9 @@ def test_restaurant_list_is_ordered_and_can_be_reused() -> None:
         assert removed == first
         assert [restaurant.position for restaurant in await store.list_restaurants(42)] == [1]
 
-        await store.remove_restaurants(42, [second])
+        assert await store.clear_restaurants(42) is True
         assert await store.list_restaurants(42) == []
+        assert await store.clear_restaurants(42) is False
         await store.close()
 
     asyncio.run(scenario())
@@ -47,6 +48,26 @@ def test_restaurant_list_rejects_duplicates_and_more_than_ten_entries() -> None:
             await store.add_restaurant(42, f"Restaurant {index}", None)
         with pytest.raises(ValueError, match="limitée"):
             await store.add_restaurant(42, "Restaurant 11", None)
+        await store.close()
+
+    asyncio.run(scenario())
+
+
+def test_restaurants_can_be_added_from_multiline_text() -> None:
+    class Bot:
+        def __init__(self, store: LunchStore) -> None:
+            self.lunch_store = store
+
+    async def scenario() -> None:
+        store = LunchStore(":memory:")
+        await store.open()
+        added, errors = await add_restaurants_from_text(
+            Bot(store),
+            42,
+            "Crous Esplanade\nMcDonald's | https://maps.google.com/?q=mcdo\nCrous Esplanade",
+        )
+        assert [restaurant.name for restaurant in added] == ["Crous Esplanade", "McDonald's"]
+        assert errors == ["Ligne 3 : Ce restaurant est déjà dans la liste."]
         await store.close()
 
     asyncio.run(scenario())

@@ -89,19 +89,24 @@ class LunchStore:
         restaurant = next((item for item in restaurants if item.position == position), None)
         if restaurant is None:
             return None
-        await self.remove_restaurants(guild_id, [restaurant])
-        return restaurant
-
-    async def remove_restaurants(self, guild_id: int, restaurants: list[Restaurant]) -> None:
-        if not restaurants:
-            return
         connection = self._require_connection()
-        await connection.executemany(
+        await connection.execute(
             "DELETE FROM lunch_restaurants WHERE guild_id = ? AND id = ?",
-            [(guild_id, restaurant.id) for restaurant in restaurants],
+            (guild_id, restaurant.id),
         )
         await self._resequence(guild_id)
         await connection.commit()
+        return restaurant
+
+    async def clear_restaurants(self, guild_id: int) -> bool:
+        connection = self._require_connection()
+        cursor = await connection.execute(
+            "DELETE FROM lunch_restaurants WHERE guild_id = ?", (guild_id,)
+        )
+        cleared = cursor.rowcount > 0
+        await cursor.close()
+        await connection.commit()
+        return cleared
 
     async def _resequence(self, guild_id: int) -> None:
         connection = self._require_connection()
