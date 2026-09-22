@@ -18,7 +18,9 @@ def test_restaurant_list_is_ordered_and_can_be_reused() -> None:
         assert restaurants_embed(restaurants).description == (
             "1. [Le Bistrot](https://maps.google.com/?q=bistrot)\n2. La Cantine"
         )
-        assert [answer.text for answer in restaurant_poll(restaurants).answers] == [
+        poll = restaurant_poll(restaurants, duration_hours=3)
+        assert poll.duration.total_seconds() == 3 * 60 * 60
+        assert [answer.text for answer in poll.answers] == [
             "Le Bistrot",
             "La Cantine",
         ]

@@ -8,7 +8,8 @@ from discord.ext import commands
 from ..bot import KirtaPBot
 from ..lunch import Restaurant
 
-POLL_DURATION = timedelta(hours=1)
+DEFAULT_POLL_DURATION_HOURS = 1
+MAX_POLL_DURATION_HOURS = 168
 
 
 class Midi(commands.Cog):
@@ -64,15 +65,21 @@ class Midi(commands.Cog):
     @midi.command(name="lancer", help="Lance le vote dans ce salon.")
     @commands.bot_has_permissions(send_polls=True)
     @app_commands.checks.bot_has_permissions(send_polls=True)
-    async def lancer(self, context: commands.Context[Any]) -> None:
+    @app_commands.describe(duree="Durée du sondage en heures, 1 par défaut")
+    async def lancer(
+        self, context: commands.Context[Any], duree: int = DEFAULT_POLL_DURATION_HOURS
+    ) -> None:
         guild = _require_guild(context)
         if guild is None:
+            return
+        if not 1 <= duree <= MAX_POLL_DURATION_HOURS:
+            await _reply(context, "La durée doit être comprise entre 1 et 168 heures.")
             return
         restaurants = await self.bot.lunch_store.list_restaurants(guild.id)
         if len(restaurants) < 2:
             await _reply(context, "Ajoutez au moins deux restaurants avant de lancer le vote.")
             return
-        await context.send(poll=restaurant_poll(restaurants))
+        await context.send(poll=restaurant_poll(restaurants, duree))
         await self.bot.lunch_store.remove_restaurants(guild.id, restaurants)
 
 
@@ -84,8 +91,12 @@ def restaurants_embed(restaurants: list[Restaurant]) -> discord.Embed:
     return discord.Embed(title="Restaurants proposés", description="\n".join(lines))
 
 
-def restaurant_poll(restaurants: list[Restaurant]) -> discord.Poll:
-    poll = discord.Poll(question="On mange où ?", duration=POLL_DURATION, multiple=False)
+def restaurant_poll(
+    restaurants: list[Restaurant], duration_hours: int = DEFAULT_POLL_DURATION_HOURS
+) -> discord.Poll:
+    poll = discord.Poll(
+        question="On mange où ?", duration=timedelta(hours=duration_hours), multiple=False
+    )
     for restaurant in restaurants:
         poll.add_answer(text=restaurant.name)
     return poll
